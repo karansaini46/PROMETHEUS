@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: prometheus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prometheus
+      POSTGRES_PASSWORD: prometheus
+      POSTGRES_DB: prometheus_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prometheus -d prometheus_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prometheus-network
+
+  # Optional OpenTelemetry collector & Jaeger UI for local traces
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    container_name: prometheus-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    networks:
+      - prometheus-network
+    profiles:
+      - telemetry
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  prometheus-network:
+    driver: bridge
