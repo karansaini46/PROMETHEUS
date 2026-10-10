@@ -8,8 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from services.api.config import get_settings
 from services.api.logging_config import setup_logging
-from services.api.routes.health import router as health_router
-from services.api.routes.runs import router as runs_router
+from services.api.middleware import CorrelationIdMiddleware, register_exception_handlers
+from services.api.routes import (
+    experiments_router,
+    health_router,
+    models_router,
+    runs_router,
+    tasks_router,
+)
 from services.api.telemetry import setup_telemetry
 
 settings = get_settings()
@@ -38,6 +44,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Correlation ID middleware
+    app.add_middleware(CorrelationIdMiddleware)
+
     # CORS configuration for the Next.js control plane
     app.add_middleware(
         CORSMiddleware,
@@ -47,9 +56,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Register safe exception handlers (no tracebacks or env leaks)
+    register_exception_handlers(app)
+
     # Mount v1 routes
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(tasks_router, prefix="/api/v1")
     app.include_router(runs_router, prefix="/api/v1")
+    app.include_router(models_router, prefix="/api/v1")
+    app.include_router(experiments_router, prefix="/api/v1")
 
     return app
 

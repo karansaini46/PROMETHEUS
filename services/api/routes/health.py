@@ -1,9 +1,9 @@
-"""Health and system status check endpoint."""
+"""Health and readiness system status check endpoints."""
 
 from datetime import UTC, datetime
 
 import docker
-from fastapi import APIRouter
+from fastapi import APIRouter, Response, status
 from pydantic import BaseModel
 
 from services.api.config import get_settings
@@ -22,6 +22,14 @@ class HealthResponse(BaseModel):
     timestamp: str
     database: str
     sandbox_available: bool
+
+
+class ReadinessResponse(BaseModel):
+    """System readiness check model."""
+
+    ready: bool
+    database: str
+    timestamp: str
 
 
 def is_sandbox_available() -> bool:
@@ -48,4 +56,32 @@ async def get_health() -> HealthResponse:
         timestamp=datetime.now(UTC).isoformat(),
         database="connected" if db_ok else "disconnected",
         sandbox_available=sandbox_ok,
+    )
+
+
+@router.get(
+    "/ready",
+    response_model=ReadinessResponse,
+    responses={
+        status.HTTP_200_OK: {"description": "System is ready to serve traffic"},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"description": "System is not ready"},
+    },
+)
+async def get_readiness(response: Response) -> ReadinessResponse:
+    """Return platform readiness probe for load balancers and orchestrators."""
+    db_ok = await check_db_health()
+    now_str = datetime.now(UTC).isoformat()
+
+    if not db_ok:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return ReadinessResponse(
+            ready=False,
+            database="disconnected",
+            timestamp=now_str,
+        )
+
+    return ReadinessResponse(
+        ready=True,
+        database="connected",
+        timestamp=now_str,
     )
