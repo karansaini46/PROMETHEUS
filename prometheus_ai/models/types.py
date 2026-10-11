@@ -27,6 +27,12 @@ MODEL_RATE_CARD_PER_1M: dict[str, tuple[float, float]] = {
     # Local / open-source default (free or marginal hosting)
     "qwen2.5-coder:7b": (0.0, 0.0),
     "deepseek-coder": (0.0, 0.0),
+    # Google Gemini Free Tier models ($0.00 / free tier on Google AI Studio)
+    "gemini-2.0-flash": (0.0, 0.0),
+    "gemini-1.5-flash": (0.0, 0.0),
+    "gemini-1.5-pro": (0.0, 0.0),
+    "gemini-2.5-flash": (0.0, 0.0),
+    "gemini-flash": (0.0, 0.0),
 }
 
 

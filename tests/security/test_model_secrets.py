@@ -85,3 +85,14 @@ def test_model_response_and_usage_do_not_contain_secrets() -> None:
     assert "token" not in resp_str.lower() or "tokens" in resp_str.lower()
     assert "secret" not in resp_str.lower()
     assert "secret" not in usage_str.lower()
+
+
+@pytest.mark.security
+def test_gemini_api_key_redacted() -> None:
+    """Verify that Google Gemini API keys are redacted automatically."""
+    gemini_key = "AIzaSyD1234567890abcdefghijklmnopqrst"
+    error_msg = f"Failed to authenticate against Gemini with key {gemini_key}: 401 Unauthorized"
+    sanitized = sanitize_secrets(error_msg)
+
+    assert gemini_key not in sanitized
+    assert "[REDACTED_CREDENTIAL]" in sanitized

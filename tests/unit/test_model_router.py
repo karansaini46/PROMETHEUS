@@ -57,6 +57,21 @@ def test_router_resolves_local_provider() -> None:
 
 
 @pytest.mark.unit
+def test_router_resolves_gemini_provider() -> None:
+    """Verify router instantiates GeminiProvider for gemini model IDs."""
+    from prometheus_ai.models.gemini_provider import GeminiProvider
+
+    provider = get_model_provider(
+        "gemini/gemini-2.0-flash",
+        api_key="test-gemini-key",
+    )
+    assert isinstance(provider, GeminiProvider)
+    assert provider.model_name == "gemini-2.0-flash"
+    assert provider.provider_name == "gemini"
+    assert provider.base_url == "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+
+@pytest.mark.unit
 def test_router_unrecognized_model_raises_configuration_error() -> None:
     """Verify unknown model prefix raises ModelConfigurationError."""
     with pytest.raises(ModelConfigurationError) as exc_info:

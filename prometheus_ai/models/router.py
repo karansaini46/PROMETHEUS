@@ -13,6 +13,7 @@ from typing import Any
 from prometheus_ai.models.anthropic_provider import AnthropicProvider
 from prometheus_ai.models.budget import BudgetLimits, BudgetTracker
 from prometheus_ai.models.exceptions import ModelConfigurationError
+from prometheus_ai.models.gemini_provider import GeminiProvider
 from prometheus_ai.models.mock_provider import MockModelProvider
 from prometheus_ai.models.openai_provider import OpenAIProvider
 from prometheus_ai.models.provider import BaseModelProvider
@@ -134,10 +135,23 @@ class ModelRouter:
                 budget_tracker=budget_tracker,
             )
 
+        if target_lower.startswith("gemini/") or "gemini" in target_lower:
+            model_name = target.split("/", 1)[1] if "/" in target else target
+            api_key = overrides.get("api_key") or self.settings.GEMINI_API_KEY
+            base_url = overrides.get("base_url") or self.settings.GEMINI_BASE_URL
+            return GeminiProvider(
+                model_name=model_name,
+                api_key=api_key,
+                base_url=base_url,
+                default_timeout=self.settings.MODEL_TIMEOUT_SECONDS,
+                max_retries=self.settings.MODEL_MAX_RETRIES,
+                budget_tracker=budget_tracker,
+            )
+
         # Fallback or unknown provider prefix
         raise ModelConfigurationError(
             f"Unrecognized or unsupported model identifier: '{target}'. "
-            "Supported prefixes: 'anthropic/', 'openai/', 'local/', 'mock/'."
+            "Supported prefixes: 'gemini/', 'anthropic/', 'openai/', 'local/', 'mock/'."
         )
 
 

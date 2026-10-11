@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     ANTHROPIC_BASE_URL: str | None = Field(default=None, description="Anthropic API base URL override")
     OPENAI_API_KEY: str | None = Field(default=None, description="OpenAI API Key")
     OPENAI_BASE_URL: str | None = Field(default=None, description="OpenAI API base URL override")
+    GEMINI_API_KEY: str | None = Field(default=None, description="Google Gemini API Key")
+    GEMINI_BASE_URL: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta/openai/",
+        description="Google Gemini OpenAI-compatible API base URL",
+    )
     LOCAL_LLM_BASE_URL: str = Field(
         default="http://localhost:11434/v1",
         description="OpenAI-compatible local inference endpoint (Ollama/vLLM)",

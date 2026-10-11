@@ -11,6 +11,7 @@ from typing import Any
 _SECRET_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"sk-ant-[a-zA-Z0-9_\-]{20,}", re.IGNORECASE),
     re.compile(r"sk-[a-zA-Z0-9_\-]{20,}", re.IGNORECASE),
+    re.compile(r"AIza[0-9A-Za-z_\-]{30,45}", re.IGNORECASE),
     re.compile(r"Bearer\s+([a-zA-Z0-9_\-\.]{10,})", re.IGNORECASE),
     re.compile(
         r"(api[_-]?key|auth[_-]?token|secret[_-]?key)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-]{8,})['\"]?",

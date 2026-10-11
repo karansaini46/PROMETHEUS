@@ -22,6 +22,7 @@ from prometheus_ai.models.exceptions import (
     ModelServiceUnavailableError,
     ModelTimeoutError,
 )
+from prometheus_ai.models.gemini_provider import GeminiProvider
 from prometheus_ai.models.mock_provider import MockModelProvider
 from prometheus_ai.models.openai_provider import OpenAIProvider
 from prometheus_ai.models.provider import BaseModelProvider
@@ -56,6 +57,7 @@ __all__ = [
     "BudgetTracker",
     "CancellationToken",
     "FinalReport",
+    "GeminiProvider",
     # Structured Output Schemas
     "InvestigationHypothesis",
     "InvestigationPlan",
