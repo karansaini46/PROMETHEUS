@@ -55,7 +55,10 @@ class Settings(BaseSettings):
         description="Default model identifier",
     )
     ANTHROPIC_API_KEY: str | None = Field(default=None, description="Anthropic API Key")
+    ANTHROPIC_AUTH_TOKEN: str | None = Field(default=None, description="Anthropic Auth Token")
+    ANTHROPIC_BASE_URL: str | None = Field(default=None, description="Anthropic API base URL override")
     OPENAI_API_KEY: str | None = Field(default=None, description="OpenAI API Key")
+    OPENAI_BASE_URL: str | None = Field(default=None, description="OpenAI API base URL override")
     LOCAL_LLM_BASE_URL: str = Field(
         default="http://localhost:11434/v1",
         description="OpenAI-compatible local inference endpoint (Ollama/vLLM)",
@@ -64,6 +67,15 @@ class Settings(BaseSettings):
         default="qwen2.5-coder:7b",
         description="Local inference model name",
     )
+
+    # Model Budgets & Reliability Controls
+    MODEL_MAX_CALLS_PER_RUN: int = Field(default=50, description="Max LLM calls permitted per debugging run")
+    MODEL_TIMEOUT_SECONDS: float = Field(default=60.0, description="Per-request model timeout in seconds")
+    MODEL_MAX_RETRIES: int = Field(default=3, description="Maximum retries for transient provider errors")
+    MODEL_MAX_RUN_TIME_SECONDS: float = Field(default=1800.0, description="Max cumulative execution time per run")
+    MODEL_MAX_TOTAL_TOKENS: int | None = Field(default=500_000, description="Max tokens permitted per run")
+    MODEL_MAX_ESTIMATED_COST_USD: float | None = Field(default=10.0, description="Max estimated cost in USD per run")
+    MODEL_MAX_RESPONSE_BYTES: int = Field(default=2_000_000, description="Max model response payload size in bytes")
 
     # Execution Sandbox & Worktrees
     DOCKER_HOST: str = Field(
