@@ -10,6 +10,7 @@ from services.api.config import get_settings
 from services.api.logging_config import setup_logging
 from services.api.middleware import CorrelationIdMiddleware, register_exception_handlers
 from services.api.routes import (
+    code_intel_router,
     experiments_router,
     health_router,
     models_router,
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(runs_router, prefix="/api/v1")
     app.include_router(models_router, prefix="/api/v1")
     app.include_router(experiments_router, prefix="/api/v1")
+    app.include_router(code_intel_router, prefix="/api/v1")
 
     return app
 

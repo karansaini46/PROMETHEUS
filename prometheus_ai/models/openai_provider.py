@@ -253,7 +253,9 @@ class OpenAIProvider(BaseModelProvider):
         )
         messages_json: list[Any] = []
         if system_prompt:
-            messages_json.append({"role": "system", "content": f"{system_prompt}\n\n{system_guidance}"})
+            messages_json.append(
+                {"role": "system", "content": f"{system_prompt}\n\n{system_guidance}"}
+            )
         else:
             messages_json.append({"role": "system", "content": system_guidance})
         messages_json.append({"role": "user", "content": prompt})
