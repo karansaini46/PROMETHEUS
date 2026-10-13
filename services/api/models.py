@@ -34,6 +34,13 @@ class Base(DeclarativeBase):
 # Use JSON type that falls back cleanly
 JSONType = JSON().with_variant(JSONB, "postgresql")
 
+try:
+    from pgvector.sqlalchemy import Vector
+    VectorType: Any = Vector(384)
+except ImportError:
+    # ponytail: fallback column type when pgvector package is omitted
+    VectorType = JSONType
+
 
 # ==============================================================================
 # Enums
@@ -683,6 +690,7 @@ class MemoryRecord(Base):
     key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict)
+    embedding: Mapped[list[float] | None] = mapped_column(VectorType, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True
     )

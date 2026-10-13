@@ -3,6 +3,7 @@
 import logging
 import uuid
 from pathlib import Path
+from typing import Any
 
 from prometheus_ai.agents.checkpointer import (
     BaseCheckpointer,
@@ -46,11 +47,13 @@ class DebuggingWorkflow:
         sandbox_runner: BaseSandboxRunner,
         model_provider: BaseModelProvider | None = None,
         checkpointer: BaseCheckpointer | None = None,
+        memory_manager: Any | None = None,
     ) -> None:
         self.git_manager = git_manager
         self.sandbox_runner = sandbox_runner
         self.model_provider = model_provider
         self.checkpointer = checkpointer or MemoryCheckpointer()
+        self.memory_manager = memory_manager
 
         # Initialize specialized roles
         self.planner = PlannerRole(model_provider=model_provider)
@@ -184,9 +187,25 @@ class DebuggingWorkflow:
         state.metadata["repo_files"] = files
         state.metadata["default_branch"] = meta.default_branch
 
+        if self.memory_manager:
+            try:
+                project_id = state.metadata.get("project_id") or getattr(state.task, "project_id", None)
+                memories = await self.memory_manager.retrieve(
+                    query=state.task.issue_description,
+                    project_id=project_id,
+                    limit=5,
+                )
+                state.metadata["retrieved_memories"] = [m.model_dump() for m in memories]
+            except Exception as mem_err:
+                logger.warning("Memory retrieval skipped: %s", mem_err)
+
         state.record_event(
             WorkflowStep.INSPECT_REPO,
-            {"files_count": len(files), "branch": meta.default_branch},
+            {
+                "files_count": len(files),
+                "branch": meta.default_branch,
+                "retrieved_memories_count": len(state.metadata.get("retrieved_memories", [])),
+            },
         )
         state.current_step = WorkflowStep.SEARCH_CODE
 
@@ -375,6 +394,50 @@ class DebuggingWorkflow:
         state.final_report = report
         state.status = WorkflowStatus.COMPLETED
         state.current_step = WorkflowStep.TERMINAL
+
+        if self.memory_manager:
+            try:
+                from prometheus_ai.memory.schema import (
+                    MemoryRecordCreate,
+                    MemoryType,
+                    VerificationStatus,
+                )
+                project_id = state.metadata.get("project_id") or getattr(state.task, "project_id", None)
+                if report.is_resolved:
+                    await self.memory_manager.store(
+                        MemoryRecordCreate(
+                            memory_type=MemoryType.EPISODIC,
+                            key=f"resolution_{state.task.task_id}",
+                            content=f"Resolved issue: {state.task.issue_description}\nSummary: {report.summary}",
+                            project_id=project_id,
+                            task_id=state.task.task_id,
+                            run_id=state.run_id,
+                            repo_path=state.task.repo_path,
+                            evidence=[f"applied_patches={len(state.applied_patches)}", report.summary],
+                            confidence=0.95,
+                            verification_status=VerificationStatus.VERIFIED,
+                            is_hypothesis=False,
+                        )
+                    )
+                else:
+                    await self.memory_manager.store(
+                        MemoryRecordCreate(
+                            memory_type=MemoryType.EPISODIC,
+                            key=f"failed_attempt_{state.task.task_id}",
+                            content=f"Failed attempt for issue: {state.task.issue_description}\nDiagnostic: {report.summary}",
+                            project_id=project_id,
+                            task_id=state.task.task_id,
+                            run_id=state.run_id,
+                            repo_path=state.task.repo_path,
+                            evidence=[report.summary],
+                            confidence=0.7,
+                            verification_status=VerificationStatus.OBSERVED,
+                            is_hypothesis=False,
+                        )
+                    )
+            except Exception as mem_err:
+                logger.warning("Failed to store episodic memory: %s", mem_err)
+
         state.record_event(
             WorkflowStep.GENERATE_REPORT,
             {"is_resolved": report.is_resolved, "summary": report.summary},
