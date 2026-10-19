@@ -2,6 +2,26 @@
 
 from dataclasses import dataclass
 
+from prometheus_ai.learning import lab
+from prometheus_ai.learning.lab import (
+    ArtifactManager,
+    CancellationToken,
+    CharTokenizer,
+    CheckpointManager,
+    CompactDecoderOnlyTransformer,
+    DataLeakageError,
+    DatasetConfig,
+    DatasetRegistry,
+    DatasetValidationError,
+    DatasetValidator,
+    ExperimentConfig,
+    ExperimentRunner,
+    LabEvaluator,
+    LabTrainer,
+    ModelComparator,
+    ModelConfig,
+    TrainingConfig,
+)
 from prometheus_ai.learning.memory_experiment import (
     ConditionResult,
     ExperimentTask,
@@ -26,4 +46,24 @@ __all__ = [
     "MemoryExperimentReport",
     "MemoryExperimentRunner",
     "TrainingDatasetConfig",
+    # Lab exports
+    "lab",
+    "ModelConfig",
+    "TrainingConfig",
+    "DatasetConfig",
+    "ExperimentConfig",
+    "CharTokenizer",
+    "CompactDecoderOnlyTransformer",
+    "DatasetValidator",
+    "DatasetValidationError",
+    "DataLeakageError",
+    "DatasetRegistry",
+    "CheckpointManager",
+    "LabTrainer",
+    "LabEvaluator",
+    "CancellationToken",
+    "ArtifactManager",
+    "ModelComparator",
+    "ExperimentRunner",
 ]
+

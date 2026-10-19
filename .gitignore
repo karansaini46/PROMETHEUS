@@ -85,3 +85,5 @@ tmp/
 *.log
 benchmarks/results/*.json
 !benchmarks/results/.gitkeep
+artifacts/
+
