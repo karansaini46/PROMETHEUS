@@ -346,8 +346,10 @@ class LLMToolPolicy(BaseToolSelectionPolicy):
                 response = await self.model_provider.generate(prompt=prompt)
             elif hasattr(self.model_provider, "generate_text"):
                 response = await self.model_provider.generate_text(prompt=prompt)
-            else:
+            elif callable(self.model_provider):
                 response = await self.model_provider(prompt)
+            else:
+                raise TypeError(f"Unsupported model provider: {type(self.model_provider)}")
             chosen_tool = None
             if hasattr(response, "content"):
                 response_text = str(response.content).strip().lower()

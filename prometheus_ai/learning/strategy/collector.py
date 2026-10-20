@@ -10,7 +10,7 @@ import json
 import logging
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from prometheus_ai.learning.strategy.schema import (
     ActionOutcome,
@@ -51,7 +51,8 @@ class TraceSanitizer:
     def sanitize(self, data: dict[str, Any]) -> dict[str, Any]:
         """Scrub known secret patterns and truncate oversized text buffers."""
         sanitized = sanitize_dict(data, custom_secrets=self.custom_secrets)
-        return self._truncate_strings(sanitized)
+        truncated = self._truncate_strings(sanitized)
+        return cast(dict[str, Any], truncated if isinstance(truncated, dict) else {})
 
 
 class TraceCollector:
@@ -124,6 +125,8 @@ class TraceCollector:
 
     def _append_to_file(self, trace: ExecutionTrace) -> None:
         """Persist single trace to disk in JSONL format."""
+        if self.storage_path is None:
+            return
         try:
             self.storage_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.storage_path, "a", encoding="utf-8") as f:

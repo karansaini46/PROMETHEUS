@@ -349,7 +349,7 @@ async def test_llm_tool_policy_success_and_fallback(sample_context: ToolSelectio
 
     # 3. Provider error -> Must fallback cleanly
     provider_error = DummyModelProvider()
-    provider_error.generate = AsyncMock(side_effect=RuntimeError("Provider timeout"))
+    setattr(provider_error, "generate", AsyncMock(side_effect=RuntimeError("Provider timeout")))  # noqa: B010
     llm_policy_err = LLMToolPolicy(model_provider=provider_error)
     dec_err = await llm_policy_err.select_tool(sample_context)
     assert dec_err.is_fallback is True
