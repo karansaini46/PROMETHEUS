@@ -28,6 +28,7 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.48b0,<0.52b0",
     "anthropic>=0.18.0",
     "openai>=1.0.0",
+    "pgvector>=0.3.0",
 ]
 
 [project.optional-dependencies]
@@ -37,12 +38,14 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "torch>=2.2.0",
 ]
 ml = [
     # Lightweight / CPU-compatible deep learning dependencies
-    "transformers>=4.45.0",
-    "peft>=0.13.0",
+    "torch>=2.2.0",
+    "numpy>=1.26.0",
 ]
+
 
 [tool.setuptools.packages.find]
 include = ["prometheus_ai*", "services*"]

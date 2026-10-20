@@ -274,3 +274,63 @@ class EvaluationRunResponse(BaseModel):
     started_at: datetime | None
     completed_at: datetime | None
     created_at: datetime
+
+
+# ==============================================================================
+# Memory Schemas
+# ==============================================================================
+
+
+class MemoryCreateRequest(BaseModel):
+    """Payload to record a new memory."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    memory_type: str = Field(description="episodic, semantic, procedural, or operational")
+    key: str = Field(min_length=1, max_length=255)
+    content: str = Field(min_length=1)
+    project_id: str | None = Field(default=None, max_length=36)
+    task_id: str | None = Field(default=None, max_length=36)
+    run_id: str | None = Field(default=None, max_length=36)
+    repo_path: str | None = None
+    revision: str | None = None
+    evidence: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    verification_status: str = Field(default="unverified")
+    is_hypothesis: bool = False
+    expires_at: datetime | None = None
+    invalidation_rules: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryVerifyRequest(BaseModel):
+    """Payload to verify an existing memory with evidence."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence: list[str] = Field(min_length=1, description="Empirical proof or test log references")
+    verified_by_run_id: str | None = None
+
+
+class MemoryRecordResponse(BaseModel):
+    """Standardized memory record API response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    memory_type: str
+    key: str
+    content: str
+    project_id: str | None
+    task_id: str | None
+    run_id: str | None
+    repo_path: str | None
+    revision: str | None
+    evidence: list[str]
+    confidence: float
+    verification_status: str
+    is_hypothesis: bool
+    is_untrusted_instruction: bool
+    expires_at: datetime | None
+    invalidation_rules: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime

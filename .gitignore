@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -85,3 +85,5 @@ tmp/
 *.log
 benchmarks/results/*.json
 !benchmarks/results/.gitkeep
+artifacts/
+
