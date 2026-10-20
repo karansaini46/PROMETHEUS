@@ -38,6 +38,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "torch>=2.2.0",
 ]
 ml = [
     # Lightweight / CPU-compatible deep learning dependencies
