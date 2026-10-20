@@ -156,7 +156,18 @@ def test_repository_indexing_and_incremental_updates() -> None:
         (repo_dir / "README.md").unlink()
         subprocess.run(["git", "add", "."], cwd=repo_dir, check=True)
         subprocess.run(
-            ["git", "commit", "-m", "Add new and remove readme"], cwd=repo_dir, check=True
+            [
+                "git",
+                "-c",
+                "user.name=CI",
+                "-c",
+                "user.email=ci@prometheus.ai",
+                "commit",
+                "-m",
+                "Add new and remove readme",
+            ],
+            cwd=repo_dir,
+            check=True,
         )
 
         index.build_index(incremental=True)
@@ -175,7 +186,20 @@ def test_fault_isolation_with_malformed_files() -> None:
         # Plant a deliberately malformed file
         (repo_dir / "broken.py").write_text("def broken_syntax(::: invalid python {{{\n")
         subprocess.run(["git", "add", "."], cwd=repo_dir, check=True)
-        subprocess.run(["git", "commit", "-m", "Add broken file"], cwd=repo_dir, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=CI",
+                "-c",
+                "user.email=ci@prometheus.ai",
+                "commit",
+                "-m",
+                "Add broken file",
+            ],
+            cwd=repo_dir,
+            check=True,
+        )
 
         index = CodeIntelligenceIndex(repo_dir)
         status = index.build_index()
