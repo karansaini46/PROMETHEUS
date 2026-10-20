@@ -126,7 +126,7 @@ async def test_cross_project_isolation(memory_manager: MemoryManager) -> None:
         MemoryRecordCreate(
             memory_type=MemoryType.SEMANTIC,
             key="secret_architecture_alpha",
-            content="Alpha internal billing schema",
+            content="Alpha internal architecture billing schema",
             project_id=alpha_id,
             confidence=0.9,
             verification_status=VerificationStatus.VERIFIED,
