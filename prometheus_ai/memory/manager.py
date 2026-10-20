@@ -140,9 +140,7 @@ class MemoryManager:
             updated_at=orm.updated_at,
         )
 
-    def _to_orm(
-        self, record: MemoryRecord, orm_run_id: str | None = None
-    ) -> MemoryRecordModel:
+    def _to_orm(self, record: MemoryRecord, orm_run_id: str | None = None) -> MemoryRecordModel:
         """Convert domain MemoryRecord to SQLAlchemy ORM model."""
         meta: dict[str, Any] = {
             "task_id": record.task_id,
@@ -206,7 +204,8 @@ class MemoryManager:
                         id=record.project_id,
                         name=f"Project {record.project_id}",
                         slug=f"proj-{record.project_id[:16]}-{uuid4().hex[:6]}",
-                        repository_url=record.repo_path or f"https://github.com/org/{record.project_id}",
+                        repository_url=record.repo_path
+                        or f"https://github.com/org/{record.project_id}",
                     )
                     session.add(proj)
                     await session.flush()
@@ -468,7 +467,9 @@ class MemoryManager:
                     )
                     if pinned and pinned != new_revision:
                         meta["verification_status"] = str(VerificationStatus.INVALIDATED)
-                        meta["invalidation_reason"] = f"Repository updated to revision {new_revision}"
+                        meta["invalidation_reason"] = (
+                            f"Repository updated to revision {new_revision}"
+                        )
                         orm.metadata_json = meta
                         count += 1
             await session.flush()

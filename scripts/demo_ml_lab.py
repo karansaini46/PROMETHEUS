@@ -38,7 +38,9 @@ def main() -> None:
     res_base = runner.run_experiment(base_config)
     print(f" -> Baseline completed in {res_base.training_summary.duration_seconds:.2f}s")
     print(f" -> Final Train Loss: {res_base.training_summary.final_train_loss:.4f}")
-    print(f" -> Test Loss: {res_base.evaluation_metrics.val_loss:.4f} | Perplexity: {res_base.evaluation_metrics.val_perplexity:.2f}")
+    print(
+        f" -> Test Loss: {res_base.evaluation_metrics.val_loss:.4f} | Perplexity: {res_base.evaluation_metrics.val_perplexity:.2f}"
+    )
     print(f" -> Inference Latency (p50): {res_base.benchmark_metrics.latency_ms_p50:.2f} ms")
     print(f" -> Artifacts saved to: {res_base.artifact_dir}")
 

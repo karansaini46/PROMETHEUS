@@ -189,7 +189,9 @@ class DebuggingWorkflow:
 
         if self.memory_manager:
             try:
-                project_id = state.metadata.get("project_id") or getattr(state.task, "project_id", None)
+                project_id = state.metadata.get("project_id") or getattr(
+                    state.task, "project_id", None
+                )
                 memories = await self.memory_manager.retrieve(
                     query=state.task.issue_description,
                     project_id=project_id,
@@ -402,7 +404,10 @@ class DebuggingWorkflow:
                     MemoryType,
                     VerificationStatus,
                 )
-                project_id = state.metadata.get("project_id") or getattr(state.task, "project_id", None)
+
+                project_id = state.metadata.get("project_id") or getattr(
+                    state.task, "project_id", None
+                )
                 if report.is_resolved:
                     await self.memory_manager.store(
                         MemoryRecordCreate(
@@ -413,7 +418,10 @@ class DebuggingWorkflow:
                             task_id=state.task.task_id,
                             run_id=state.run_id,
                             repo_path=state.task.repo_path,
-                            evidence=[f"applied_patches={len(state.applied_patches)}", report.summary],
+                            evidence=[
+                                f"applied_patches={len(state.applied_patches)}",
+                                report.summary,
+                            ],
                             confidence=0.95,
                             verification_status=VerificationStatus.VERIFIED,
                             is_hypothesis=False,

@@ -29,7 +29,9 @@ def _init_sample_repository(path: Path) -> None:
         "GIT_COMMITTER_NAME": "Intel Tester",
         "GIT_COMMITTER_EMAIL": "inteltester@example.com",
     }
-    subprocess.run(["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True, env=env)
+    subprocess.run(
+        ["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True, env=env
+    )
 
     # 1. Math module
     math_code = (
@@ -75,7 +77,13 @@ def _init_sample_repository(path: Path) -> None:
     (path / "README.md").write_text("# Math and Stats Engine\nDocumentation for data engine.\n")
 
     subprocess.run(["git", "add", "."], cwd=path, check=True, capture_output=True, env=env)
-    subprocess.run(["git", "commit", "-m", "Initial code commit"], cwd=path, check=True, capture_output=True, env=env)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial code commit"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        env=env,
+    )
 
 
 @pytest.mark.unit
@@ -107,6 +115,7 @@ def test_ast_symbol_extraction() -> None:
     assert "start" in sym_names
     assert sym_names["start"].kind == SymbolKind.METHOD
     assert sym_names["start"].parent_name == "Engine"
+    assert sym_names["start"].signature is not None
     assert "(self, mode)" in sym_names["start"].signature
 
     assert "run_pipeline" in sym_names
@@ -146,7 +155,9 @@ def test_repository_indexing_and_incremental_updates() -> None:
         (repo_dir / "new_module.py").write_text("def new_func(): pass\n")
         (repo_dir / "README.md").unlink()
         subprocess.run(["git", "add", "."], cwd=repo_dir, check=True)
-        subprocess.run(["git", "commit", "-m", "Add new and remove readme"], cwd=repo_dir, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "Add new and remove readme"], cwd=repo_dir, check=True
+        )
 
         index.build_index(incremental=True)
         assert "new_module.py" in index.file_indices

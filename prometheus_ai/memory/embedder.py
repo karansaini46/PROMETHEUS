@@ -45,7 +45,7 @@ class DeterministicHashEmbedder:
 
             # Bi-gram hash for contextual pairing
             if i > 0:
-                bi = f"{tokens[i-1]}_{token}"
+                bi = f"{tokens[i - 1]}_{token}"
                 h_bi = int(hashlib.sha256(bi.encode("utf-8")).hexdigest(), 16)
                 idx_bi = h_bi % self.dimension
                 sign_bi = 1.0 if ((h_bi >> 8) & 1) == 0 else -1.0

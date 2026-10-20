@@ -274,9 +274,9 @@ class MemoryExperimentRunner:
         summary_text = (
             f"=== MEMORY EVALUATION EXPERIMENT REPORT ===\n"
             f"Tuning Tasks: {len(tuning_tasks)} | Held-Out Evaluation Tasks: {total_tasks}\n"
-            f"Condition A (Baseline): Success={cond_a.success_rate*100:.1f}%, Cost=${cond_a.total_cost_usd:.4f}\n"
-            f"Condition B (Memory):   Success={cond_b.success_rate*100:.1f}%, Cost=${cond_b.total_cost_usd:.4f}\n"
-            f"Deltas: Success Δ={delta_success*100:+.1f}%, Cost Δ=${delta_cost:+.4f}\n"
+            f"Condition A (Baseline): Success={cond_a.success_rate * 100:.1f}%, Cost=${cond_a.total_cost_usd:.4f}\n"
+            f"Condition B (Memory):   Success={cond_b.success_rate * 100:.1f}%, Cost=${cond_b.total_cost_usd:.4f}\n"
+            f"Deltas: Success Δ={delta_success * 100:+.1f}%, Cost Δ=${delta_cost:+.4f}\n"
             f"Retrieval Errors: {errors_b}\n"
             f"Core Instructions Unmodified Check: {'PASSED' if instructions_intact else 'FAILED'}\n"
             f"Conclusion: {conclusion}"

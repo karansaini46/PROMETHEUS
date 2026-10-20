@@ -36,6 +36,7 @@ JSONType = JSON().with_variant(JSONB, "postgresql")
 
 try:
     from pgvector.sqlalchemy import Vector
+
     VectorType: Any = Vector(384)
 except ImportError:
     # ponytail: fallback column type when pgvector package is omitted

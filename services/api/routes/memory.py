@@ -94,7 +94,9 @@ async def list_memories(
     query: str | None = Query(default=None, description="Lexical and semantic search query"),
     project_id: str | None = Query(default=None, description="Scope query to specific project"),
     memory_type: str | None = Query(default=None, description="Filter by memory type"),
-    current_revision: str | None = Query(default=None, description="Version check for invalidation"),
+    current_revision: str | None = Query(
+        default=None, description="Version check for invalidation"
+    ),
     min_confidence: float = Query(default=0.0, ge=0.0, le=1.0),
     exclude_unverified: bool = Query(default=False),
     include_cross_project: bool = Query(default=False),

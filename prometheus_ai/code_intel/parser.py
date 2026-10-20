@@ -222,7 +222,7 @@ class PythonAstAdapter(BaseLanguageAdapter):
                 chunk_text = "\n".join(chunk_lines)
                 chunks.append(
                     CodeChunk(
-                        chunk_id=f"{file_path}:{i+1}:{i+len(chunk_lines)}",
+                        chunk_id=f"{file_path}:{i + 1}:{i + len(chunk_lines)}",
                         file_path=file_path,
                         start_line=i + 1,
                         end_line=i + len(chunk_lines),
@@ -263,7 +263,7 @@ class GenericTextAdapter(BaseLanguageAdapter):
             chunk_text = "\n".join(chunk_lines)
             chunks.append(
                 CodeChunk(
-                    chunk_id=f"{file_path}:{i+1}:{i+len(chunk_lines)}",
+                    chunk_id=f"{file_path}:{i + 1}:{i + len(chunk_lines)}",
                     file_path=file_path,
                     start_line=i + 1,
                     end_line=i + len(chunk_lines),

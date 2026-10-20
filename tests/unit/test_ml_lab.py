@@ -15,6 +15,7 @@ Validates:
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -51,7 +52,7 @@ from prometheus_ai.learning.lab.transformer import CompactDecoderOnlyTransformer
 
 
 @pytest.fixture
-def tmp_lab_dir() -> Path:
+def tmp_lab_dir() -> Generator[Path, None, None]:
     """Fixture providing an isolated temporary directory for test artifacts."""
     with tempfile.TemporaryDirectory() as td:
         yield Path(td)

@@ -14,7 +14,9 @@ class MemoryType(StrEnum):
     EPISODIC = "episodic"  # Previous investigations, tool actions, outcomes, and failures
     SEMANTIC = "semantic"  # Stable technical facts, repository documentation, verified architecture
     PROCEDURAL = "procedural"  # Reusable investigation strategies and workflows
-    OPERATIONAL = "operational"  # Repository setup requirements, test constraints, environment instructions
+    OPERATIONAL = (
+        "operational"  # Repository setup requirements, test constraints, environment instructions
+    )
 
 
 class VerificationStatus(StrEnum):
@@ -37,12 +39,16 @@ class MemoryRecord(BaseModel):
     project_id: str | None = Field(default=None, description="Owning project ID for isolation")
     task_id: str | None = Field(default=None, description="Source task identifier")
     run_id: str | None = Field(default=None, description="Source execution run identifier")
-    repo_path: str | None = Field(default=None, description="Repository filesystem or URL reference")
+    repo_path: str | None = Field(
+        default=None, description="Repository filesystem or URL reference"
+    )
     revision: str | None = Field(default=None, description="Commit SHA or version where recorded")
     evidence: list[str] = Field(default_factory=list, description="Supporting evidence references")
     confidence: float = Field(default=0.8, ge=0.0, le=1.0, description="Confidence score")
     verification_status: VerificationStatus = Field(default=VerificationStatus.UNVERIFIED)
-    is_hypothesis: bool = Field(default=False, description="Flag distinguishing hypothesis from fact")
+    is_hypothesis: bool = Field(
+        default=False, description="Flag distinguishing hypothesis from fact"
+    )
     is_untrusted_instruction: bool = Field(
         default=False,
         description="Flag indicating operational instructions that must not be executed blindly",
@@ -52,7 +58,9 @@ class MemoryRecord(BaseModel):
         default_factory=dict,
         description="Version or event invalidation rules (e.g. pinned_revision, invalidate_on_revision_change)",
     )
-    embedding: list[float] | None = Field(default=None, description="384-dim semantic embedding vector")
+    embedding: list[float] | None = Field(
+        default=None, description="384-dim semantic embedding vector"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

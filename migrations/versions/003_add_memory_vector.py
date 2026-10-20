@@ -28,6 +28,7 @@ def upgrade() -> None:
     # 2. Add embedding column to memory_records if not present
     try:
         from pgvector.sqlalchemy import Vector
+
         column_type = Vector(384)
     except ImportError:
         column_type = sa.JSON()

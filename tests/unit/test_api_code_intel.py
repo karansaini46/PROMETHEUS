@@ -12,7 +12,12 @@ def _init_api_test_repo(path: Path) -> None:
     subprocess.run(["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True)
     (path / "app.py").write_text("def run_app():\n    return 'running'\n")
     subprocess.run(["git", "add", "."], cwd=path, check=True, capture_output=True)
-    subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@e.com", "commit", "-m", "init"], cwd=path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "user.name=T", "-c", "user.email=t@e.com", "commit", "-m", "init"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+    )
 
 
 @pytest.mark.unit
