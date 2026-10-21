@@ -18,6 +18,12 @@ from services.api.schemas import (
     MemoryRecordResponse,
     MemoryVerifyRequest,
 )
+from services.api.security import (
+    AuthenticatedClient,
+    verify_action_approval,
+    verify_admin_access,
+    verify_api_key,
+)
 
 router = APIRouter(prefix="/memory", tags=["Memory Subsystem"])
 
@@ -42,6 +48,7 @@ def get_memory_manager(
 async def create_memory(
     request: MemoryCreateRequest,
     manager: Annotated[MemoryManager, Depends(get_memory_manager)],
+    client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
 ) -> MemoryRecordResponse:
     """Create and persist a new episodic, semantic, procedural, or operational memory."""
     try:
@@ -91,6 +98,7 @@ async def create_memory(
 )
 async def list_memories(
     manager: Annotated[MemoryManager, Depends(get_memory_manager)],
+    client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
     query: str | None = Query(default=None, description="Lexical and semantic search query"),
     project_id: str | None = Query(default=None, description="Scope query to specific project"),
     memory_type: str | None = Query(default=None, description="Filter by memory type"),
@@ -137,6 +145,7 @@ async def list_memories(
 async def get_memory(
     memory_id: str,
     manager: Annotated[MemoryManager, Depends(get_memory_manager)],
+    client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
 ) -> MemoryRecordResponse:
     """Inspect memory provenance, confidence, and verification rules."""
     record = await manager.inspect(memory_id)
@@ -157,6 +166,7 @@ async def verify_memory(
     memory_id: str,
     request: MemoryVerifyRequest,
     manager: Annotated[MemoryManager, Depends(get_memory_manager)],
+    client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
 ) -> MemoryRecordResponse:
     """Promote an unverified memory to verified status backed by empirical evidence."""
     try:
@@ -178,13 +188,15 @@ async def verify_memory(
 @router.delete(
     "/{memory_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a memory record",
+    summary="Delete a memory record (Admin Only)",
 )
 async def delete_memory(
     memory_id: str,
     manager: Annotated[MemoryManager, Depends(get_memory_manager)],
+    client: Annotated[AuthenticatedClient, Depends(verify_admin_access)],
+    approval: Annotated[bool, Depends(verify_action_approval)],
 ) -> None:
-    """Allow users to delete a memory record permanently."""
+    """Administrative deletion of a memory record with explicit approval check."""
     deleted = await manager.delete(memory_id)
     if not deleted:
         raise HTTPException(
@@ -195,13 +207,15 @@ async def delete_memory(
 
 @router.post(
     "/projects/{project_id}/invalidate",
-    summary="Invalidate project memories by revision",
+    summary="Invalidate project memories by revision (Admin Only)",
 )
 async def invalidate_by_revision(
     project_id: str,
     revision: Annotated[str, Query(description="New repository commit SHA")],
     manager: Annotated[MemoryManager, Depends(get_memory_manager)],
+    client: Annotated[AuthenticatedClient, Depends(verify_admin_access)],
+    approval: Annotated[bool, Depends(verify_action_approval)],
 ) -> dict[str, int]:
-    """Invalidate all project memories pinned to older repository revisions."""
+    """Administrative invalidation of memories with explicit approval check."""
     count = await manager.invalidate_by_revision(project_id=project_id, new_revision=revision)
     return {"invalidated_count": count}

@@ -22,7 +22,9 @@ from prometheus_ai.execution.guards import (
     SecurityException,
     is_protected_file,
     sanitize_untrusted_output,
+    validate_safe_git_ref,
     validate_safe_path,
+    validate_safe_repo_dir,
 )
 
 logger = logging.getLogger(__name__)
@@ -188,7 +190,7 @@ class GitManager:
         name: str | None = None,
     ) -> RepositoryMetadata:
         """Register and validate a local git repository."""
-        resolved = Path(repo_path).resolve()
+        resolved = validate_safe_repo_dir(repo_path)
         if not resolved.exists() or not resolved.is_dir():
             raise FileNotFoundError(f"Repository directory does not exist: {repo_path}")
 
@@ -243,7 +245,11 @@ class GitManager:
         branch_name: str | None = None,
     ) -> WorktreeMetadata:
         """Create an isolated Git worktree for safe experimentation and test runs."""
-        resolved_repo = Path(repo_path).resolve()
+        resolved_repo = validate_safe_repo_dir(repo_path)
+        validate_safe_git_ref(base_commit)
+        if branch_name:
+            validate_safe_git_ref(branch_name)
+
         worktree_id = f"wt-{uuid.uuid4().hex[:10]}"
         worktree_dir = self.worktree_base_dir / worktree_id
         target_branch = branch_name or f"prometheus-agent/{worktree_id}"

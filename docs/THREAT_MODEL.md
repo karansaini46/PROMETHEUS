@@ -163,14 +163,92 @@ This document applies a rigorous defense-in-depth methodology (grounded in STRID
 
 ---
 
+---
+
+### 3.8 Threat 8: Administrative Privilege Escalation & Destructive Actions
+
+#### Attack Scenarios
+1. **Unprivileged Destructive Actions:** Standard API users trigger bulk invalidation or permanent deletion of institutional memory or production checkpoints.
+2. **Autonomous Deployment Overrides:** Autonomous models or rogue workflows trigger automated deployment or external PR merges without human verification.
+
+#### Mitigations & Architectural Controls
+- **Role-Based API Boundary:** Strict separation of standard operations from administrative commands via `verify_admin_access()` requiring dedicated `ADMIN_SECRET_KEY`.
+- **Human-in-the-Loop Explicit Approval:** Destructive memory operations and deployments require an explicit `X-Action-Approval: approved` confirmation header (`verify_action_approval`), preventing accidental or automated triggering.
+
+---
+
+### 3.9 Threat 9: Git Command Option Injection & Repository Path Traversal
+
+#### Attack Scenarios
+1. **Git Option Flag Injection:** An attacker crafts a branch or ref starting with flags like `--upload-pack` or `-o` to trigger arbitrary code execution during `git checkout` or `git worktree`.
+2. **Root Filesystem Registration:** An attacker registers `/etc` or `/proc` as a repository path to inspect host files through code intelligence tools.
+
+#### Mitigations & Architectural Controls
+- **Ref Validation:** `validate_safe_git_ref()` strictly prohibits refs beginning with `-`, null bytes, control characters, and shell metacharacters (`;`, `$`, `` ` ``, `|`, `&`, `>`, `<`, `!`, `"`, `'`, `\`, `(`, `)`).
+- **System Directory Blocklist:** `validate_safe_repo_dir()` validates that repository paths resolve within safe boundaries and outright rejects system root paths (`/`, `/etc`, `/proc`, `/sys`, `/dev`, `/boot`, `/usr`).
+
+---
+
+### 3.10 Threat 10: API Flooding & Large Payload Denial of Service
+
+#### Attack Scenarios
+1. **Request Flooding:** Rapid bursts of requests exhaust connection pools or event loop capacity.
+2. **Payload Memory Bomb:** Upload of massive payloads causing excessive memory consumption and OOM.
+3. **Slowloris / Hanging Requests:** Client holds connections open, causing thread/connection exhaustion.
+
+#### Mitigations & Architectural Controls
+- **Sliding-Window Rate Limiting:** `RateLimitMiddleware` restricts client IPs/tokens to configurable thresholds (default 300 req/min) returning HTTP 429 with `Retry-After`.
+- **Payload Bounding:** `MaxPayloadSizeMiddleware` enforces strict request body limits (default 10 MB) returning HTTP 413.
+- **Request Timeouts:** `RequestTimeoutMiddleware` bounds request lifetimes (default 60s) returning HTTP 504 Gateway Timeout.
+
+---
+
+### 3.11 Threat 11: Process Crashes, Orphaned Resources & Incomplete Runs
+
+#### Attack Scenarios
+1. **Unrecovered Crash State:** Server crashes while executing a task, leaving runs permanently stuck in `RUNNING` status and blocking subsequent retries.
+2. **Disk & Container Leaks:** Abrupt termination leaves abandoned git worktrees and dangling Docker containers.
+
+#### Mitigations & Architectural Controls
+- **Worker Health Supervisor:** `WorkerManager` tracks active tasks, background heartbeats, and exposes health metrics via `/api/v1/health/worker`.
+- **Startup Crash Recovery:** `recover_interrupted_tasks()` detects orphaned runs in `RUNNING`/`PENDING` on startup and cleanly transitions them to `FAILED` with immutable audit trail events.
+- **Resource Cleanup Sweep:** `cleanup_abandoned_resources()` prunes stale worktrees and terminates dangling sandbox containers.
+
+---
+
 ## 4. Threat Modeling Summary & Security Verification Matrix
 
 | Threat Category | Primary Risk | Mitigation Control | Verification Test |
 | :--- | :--- | :--- | :--- |
-| **Prompt Injection** | LLM hijacked to leak data or run rogue actions | Role boundaries + typed tools + human approvals | Injection test suite in `tests/test_security_injection.py` |
-| **Malicious Repo** | Host code execution via build scripts or git hooks | Bare mirrors on host; hooks disabled; run inside sandbox | Hostile repo test fixture with malicious `setup.py` |
-| **Sandbox Escape** | Host filesystem compromise or root takeover | `--cap-drop=ALL`, `no-new-privileges`, seccomp, no Docker socket | Sandbox container escape regression test |
-| **Path Traversal** | Reading host `/etc/passwd` or `.ssh/id_rsa` | `Path.resolve().is_relative_to(base_dir)` | Path traversal unit tests in `test_git_manager.py` |
-| **Secrets Exposure** | Host API keys stolen by untrusted test code | Sterile environment whitelist; regex scrubbing in logs | Container env dump verification in `test_sandbox.py` |
-| **Resource Exhaustion** | Host DOS via fork-bomb or memory starvation | `--pids-limit=256`, 4GB RAM cap, 300s timeout, token limit | Fork-bomb execution test in `test_sandbox.py` |
-| **Unauthorized Network** | Exfiltration or SSRF | `--network=none` during test phase | Network connection test (ping/curl) inside container |
+| **Prompt Injection** | LLM hijacked to leak data or run rogue actions | Role boundaries + typed tools + sanitized prompts | `test_strategy_safety_governance.py` |
+| **Malicious Repo** | Host code execution via build scripts or git hooks | Bare mirrors on host; hooks disabled; run inside sandbox | `test_git_worktree_patch.py` |
+| **Sandbox Escape** | Host filesystem compromise or root takeover | `--cap-drop=ALL`, `no-new-privileges`, seccomp, no Docker socket | `test_sandbox_execution.py` |
+| **Path Traversal** | Reading host `/etc/passwd` or `.ssh/id_rsa` | `Path.resolve().is_relative_to()` + `validate_safe_repo_dir` | `test_path_traversal.py`, `test_hardening_security.py` |
+| **Git Ref Injection** | Shell / option injection via branch names | `validate_safe_git_ref` blocking `-` flags & metacharacters | `test_hardening_security.py` |
+| **Secrets Exposure** | Host API keys stolen by untrusted test code | Sterile environment whitelist; regex scrubbing in logs & spans | `test_model_secrets.py`, `test_hardening_telemetry.py` |
+| **Resource Exhaustion** | Host DOS via fork-bomb or memory starvation | `--pids-limit=256`, 4GB RAM cap, request timeouts, rate limits | `test_sandbox_execution.py`, `test_hardening_reliability.py` |
+| **Privilege Escalation**| Destructive operations performed by unprivileged callers | Administrative role separation + human approval requirement | `test_hardening_security.py` |
+| **Task Abandonment** | Stuck runs and resource leaks after host crash | `WorkerManager` crash recovery + abandoned worktree pruning | `test_hardening_reliability.py` |
+
+---
+
+## 5. Remaining Risks & Known Limitations
+
+> [!WARNING]
+> While PROMETHEUS incorporates rigorous defense-in-depth controls, autonomous code execution environments retain inherent residual risks that require external administrative safeguards. Do not treat automated test passes as a substitute for independent human code review before deploying to production.
+
+1. **Linux Kernel / Container Runtimes (Sandbox Escapes):**
+   - Docker container isolation relies on the host Linux kernel (cgroups, namespaces, seccomp). Unknown kernel 0-days or misconfigured local Docker daemon sockets can theoretically permit sandbox escapes.
+   - *Mitigation recommendation:* In high-security multi-tenant production, deploy sandboxes inside microVM architectures (e.g., AWS Firecracker or gVisor runsc runtime).
+
+2. **Node-Local Rate Limiting:**
+   - The current `RateLimitMiddleware` maintains in-memory sliding windows on a single host. When deploying across a distributed cluster behind a load balancer, rate limits are per-node rather than global.
+   - *Mitigation recommendation:* Integrate a shared Redis instance for distributed token-bucket rate limiting in multi-replica deployments.
+
+3. **Outbound Egress in Permissive Mode:**
+   - In dependency resolution mode where sandboxes are granted network access, sandbox egress filtering relies on Docker bridge network rules. If permissive networks are allowed, models could theoretically attempt external data exfiltration.
+   - *Mitigation recommendation:* Use zero-network (`--network=none`) by default; pre-cache language dependencies (wheels, npm tarballs) in local mirrors.
+
+4. **Indirect Prompt Injection Inherent Non-Determinism:**
+   - While untrusted repository instructions are sanitized, operational contexts quarantined, and destructive actions gate-kept with human approval, LLMs can still generate incorrect or subtle hallucinated logic.
+   - *Mitigation recommendation:* Require deterministic test passage (`RunAllowlistedTestsTool`) and mandatory human sign-off on patch diffs before merge.

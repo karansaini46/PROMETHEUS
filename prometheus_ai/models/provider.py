@@ -29,6 +29,7 @@ from prometheus_ai.models.exceptions import (
 )
 from prometheus_ai.models.sanitizer import sanitize_secrets
 from prometheus_ai.models.types import ModelResponse
+from services.api.telemetry import record_model_usage, trace_span_async
 
 logger = logging.getLogger(__name__)
 
@@ -99,27 +100,45 @@ class BaseModelProvider(ABC):
 
         req_timeout = timeout or self.default_timeout
 
-        async def _call() -> ModelResponse:
-            if cancellation_token:
-                cancellation_token.check_cancelled()
-            return await self._execute_generate(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                tools=tools,
-                temperature=temperature,
-                timeout=req_timeout,
+        async with trace_span_async(
+            "model.request",
+            attributes={
+                "model.provider": self.provider_name,
+                "model.name": self.model_name,
+                "model.temperature": temperature,
+                "model.timeout": req_timeout,
+            },
+        ) as span:
+
+            async def _call() -> ModelResponse:
+                if cancellation_token:
+                    cancellation_token.check_cancelled()
+                return await self._execute_generate(
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    tools=tools,
+                    temperature=temperature,
+                    timeout=req_timeout,
+                )
+
+            response = cast(
+                ModelResponse,
+                await self._retry_with_backoff(_call, cancellation_token=cancellation_token),
             )
 
-        response = cast(
-            ModelResponse,
-            await self._retry_with_backoff(_call, cancellation_token=cancellation_token),
-        )
+            record_model_usage(
+                span,
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+                total_tokens=response.usage.total_tokens,
+                cost_usd=getattr(response.usage, "cost_estimate_usd", None),
+            )
 
-        if self.budget_tracker:
-            response_bytes = len(response.content.encode("utf-8"))
-            self.budget_tracker.record_usage(response.usage, response_bytes=response_bytes)
+            if self.budget_tracker:
+                response_bytes = len(response.content.encode("utf-8"))
+                self.budget_tracker.record_usage(response.usage, response_bytes=response_bytes)
 
-        return response
+            return response
 
     async def generate_structured(
         self,
@@ -143,27 +162,46 @@ class BaseModelProvider(ABC):
 
         req_timeout = timeout or self.default_timeout
 
-        async def _call() -> tuple[T, ModelResponse]:
-            if cancellation_token:
-                cancellation_token.check_cancelled()
-            return await self._execute_generate_structured(
-                prompt=prompt,
-                response_schema=response_schema,
-                system_prompt=system_prompt,
-                temperature=temperature,
-                timeout=req_timeout,
+        async with trace_span_async(
+            "model.request_structured",
+            attributes={
+                "model.provider": self.provider_name,
+                "model.name": self.model_name,
+                "model.schema": response_schema.__name__,
+                "model.temperature": temperature,
+                "model.timeout": req_timeout,
+            },
+        ) as span:
+
+            async def _call() -> tuple[T, ModelResponse]:
+                if cancellation_token:
+                    cancellation_token.check_cancelled()
+                return await self._execute_generate_structured(
+                    prompt=prompt,
+                    response_schema=response_schema,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    timeout=req_timeout,
+                )
+
+            parsed, response = cast(
+                tuple[T, ModelResponse],
+                await self._retry_with_backoff(_call, cancellation_token=cancellation_token),
             )
 
-        parsed, response = cast(
-            tuple[T, ModelResponse],
-            await self._retry_with_backoff(_call, cancellation_token=cancellation_token),
-        )
+            record_model_usage(
+                span,
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+                total_tokens=response.usage.total_tokens,
+                cost_usd=getattr(response.usage, "cost_estimate_usd", None),
+            )
 
-        if self.budget_tracker:
-            response_bytes = len(response.content.encode("utf-8"))
-            self.budget_tracker.record_usage(response.usage, response_bytes=response_bytes)
+            if self.budget_tracker:
+                response_bytes = len(response.content.encode("utf-8"))
+                self.budget_tracker.record_usage(response.usage, response_bytes=response_bytes)
 
-        return parsed, response
+            return parsed, response
 
     async def _retry_with_backoff(
         self,

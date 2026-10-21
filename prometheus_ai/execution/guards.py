@@ -245,3 +245,76 @@ def validate_safe_command_args(args: list[str]) -> list[str]:
             )
 
     return args
+
+
+FORBIDDEN_SYSTEM_ROOTS: frozenset[str] = frozenset(
+    {"/", "/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/bin", "/sbin", "/usr"}
+)
+
+
+def validate_safe_repo_dir(repo_path: str | Path) -> Path:
+    """Validate that a repository directory path is canonical and not an OS system root."""
+    raw = str(repo_path)
+    if "\0" in raw:
+        raise PathTraversalError("Repository path contains forbidden null byte")
+
+    resolved = Path(repo_path).resolve()
+    resolved_str = str(resolved).rstrip("/")
+
+    if resolved_str in FORBIDDEN_SYSTEM_ROOTS or resolved_str == "":
+        raise SecurityException(
+            f"Access denied: Path '{repo_path}' targets a forbidden system root directory"
+        )
+
+    for forbidden in FORBIDDEN_SYSTEM_ROOTS:
+        if forbidden != "/" and resolved_str.startswith(f"{forbidden}/"):
+            raise SecurityException(
+                f"Access denied: Path '{repo_path}' is inside protected system directory '{forbidden}'"
+            )
+
+    return resolved
+
+
+def validate_safe_git_ref(ref: str) -> str:
+    """Validate that a git branch name or commit ref is free of command injection flags and illegal characters."""
+    if not ref or not isinstance(ref, str):
+        raise SecurityException("Git ref cannot be empty")
+
+    clean_ref = ref.strip()
+    if clean_ref.startswith("-"):
+        raise SecurityException(
+            f"Git ref cannot start with a dash to prevent option injection: '{ref}'"
+        )
+
+    if "\0" in clean_ref:
+        raise PathTraversalError("Git ref contains forbidden null byte")
+
+    # Reject whitespace and control characters
+    for ch in clean_ref:
+        if ord(ch) <= 32 or ord(ch) == 127:
+            raise SecurityException(
+                f"Git ref contains forbidden whitespace or control character: '{ref}'"
+            )
+
+    # Reject shell injection metacharacters
+    forbidden_chars = set(";$\"`'|&><!\\()")
+    for ch in clean_ref:
+        if ch in forbidden_chars:
+            raise SecurityException(
+                f"Git ref contains forbidden shell metacharacter '{ch}': '{ref}'"
+            )
+
+    # Check for git illegal ref sequences
+    forbidden_sequences = ["..", "@{", "//"]
+    for seq in forbidden_sequences:
+        if seq in clean_ref:
+            raise SecurityException(
+                f"Git ref contains illegal git character sequence '{seq}': '{ref}'"
+            )
+
+    if len(clean_ref) > 255:
+        raise ResourceLimitExceededError(
+            f"Git ref exceeds maximum length of 255 characters: '{ref}'"
+        )
+
+    return clean_ref

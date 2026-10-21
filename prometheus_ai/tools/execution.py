@@ -12,6 +12,7 @@ from prometheus_ai.execution.sandbox import (
     SandboxResult,
 )
 from prometheus_ai.tools.base import BaseTool, ToolDefinition
+from services.api.telemetry import trace_span_async
 
 
 class ExecutionRegistry:
@@ -36,11 +37,12 @@ class ExecutionRegistry:
         self,
         execution_id: str,
         token: CancellationToken,
-        runner: BaseSandboxRunner,
+        runner: BaseSandboxRunner | None = None,
     ) -> None:
         with self._mu:
             self._tokens[execution_id] = token
-            self._runners[execution_id] = runner
+            if runner is not None:
+                self._runners[execution_id] = runner
 
     def unregister(self, execution_id: str) -> None:
         with self._mu:
@@ -142,31 +144,45 @@ class RunAllowlistedTestsTool(BaseTool):
         )
         self.registry.register(execution_id, cancel_token, self.runner)
 
-        try:
-            # Run async in executor
-            result: SandboxResult = await self.runner.execute_command_async(
-                cmd=cmd,
-                cwd=worktree_path,
-                limits=limits,
-                cancel_token=cancel_token,
-                network_enabled=network_enabled,
-            )
-        finally:
-            self.registry.unregister(execution_id)
+        async with trace_span_async(
+            "test.run",
+            attributes={
+                "tool.name": "run_allowlisted_tests",
+                "test.runner": test_runner,
+                "test.target": test_target or "all",
+                "timeout_seconds": timeout_seconds,
+                "network_enabled": network_enabled,
+            },
+        ) as span:
+            try:
+                # Run async in executor
+                result: SandboxResult = await self.runner.execute_command_async(
+                    cmd=cmd,
+                    cwd=worktree_path,
+                    limits=limits,
+                    cancel_token=cancel_token,
+                    network_enabled=network_enabled,
+                )
+                span.set_attribute("test.exit_code", result.exit_code)
+                span.set_attribute("test.timed_out", result.timed_out)
+                span.set_attribute("test.cancelled", result.cancelled)
+                span.set_attribute("test.oom_killed", result.oom_killed)
+            finally:
+                self.registry.unregister(execution_id)
 
-        return {
-            "exit_code": result.exit_code,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "duration_seconds": result.duration_seconds,
-            "timed_out": result.timed_out,
-            "oom_killed": result.oom_killed,
-            "cancelled": result.cancelled,
-            "truncated": result.truncated,
-            "execution_id": result.execution_id,
-            "backend": self.runner.backend_name,
-            "isolation_level": self.runner.isolation_level,
-        }
+            return {
+                "exit_code": result.exit_code,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "duration_seconds": result.duration_seconds,
+                "timed_out": result.timed_out,
+                "oom_killed": result.oom_killed,
+                "cancelled": result.cancelled,
+                "truncated": result.truncated,
+                "execution_id": result.execution_id,
+                "backend": self.runner.backend_name,
+                "isolation_level": self.runner.isolation_level,
+            }
 
 
 class CancelExecutionTool(BaseTool):

@@ -21,6 +21,7 @@ from prometheus_ai.execution.sandbox import (
     SandboxLimits,
     SandboxResult,
 )
+from services.api.telemetry import traced
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ class DockerSandboxRunner(BaseSandboxRunner):
                 ) from err
         return self._client
 
+    @traced(span_name="sandbox.execution")
     def execute_command(
         self,
         cmd: list[str],

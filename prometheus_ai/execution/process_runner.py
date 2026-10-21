@@ -20,6 +20,7 @@ from prometheus_ai.execution.sandbox import (
     SandboxLimits,
     SandboxResult,
 )
+from services.api.telemetry import traced
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class ProcessSandboxRunner(BaseSandboxRunner):
     def isolation_level(self) -> str:
         return "process"
 
+    @traced(span_name="sandbox.execution")
     def execute_command(
         self,
         cmd: list[str],
@@ -59,8 +61,8 @@ class ProcessSandboxRunner(BaseSandboxRunner):
         network_enabled: bool = False,
     ) -> SandboxResult:
         """Execute command in a constrained local subprocess."""
-        validate_safe_command_args(cmd)
         active_limits = limits or SandboxLimits()
+        validate_safe_command_args(cmd)
         execution_id = f"prometheus-proc-{uuid.uuid4().hex[:12]}"
 
         # Resolve and validate working directory

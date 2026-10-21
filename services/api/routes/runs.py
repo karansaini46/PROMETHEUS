@@ -1,17 +1,18 @@
 """Execution Runs API Routes.
 
 Manages execution run lifecycles, explicit state transitions, ordered execution
-event streams, and cancellation.
+event streams, cancellation propagation, and idempotency.
 """
 
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from prometheus_ai.tools.execution import ExecutionRegistry
 from services.api.db import get_db_session
 from services.api.models import (
     AgentStep,
@@ -29,6 +30,7 @@ from services.api.schemas import (
 )
 from services.api.security import AuthenticatedClient, verify_api_key
 from services.api.state_machine import validate_run_transition
+from services.api.telemetry import trace_span
 
 router = APIRouter(prefix="/runs", tags=["Runs"])
 
@@ -72,8 +74,12 @@ async def create_run(
     payload: CreateRunRequest,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
+    x_idempotency_key: Annotated[str | None, Header(alias="X-Idempotency-Key")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> RunResponse:
-    """Launch a new autonomous debugging or execution run."""
+    """Launch a new autonomous debugging or execution run with idempotency support and tracing."""
+    effective_idempotency_key = x_idempotency_key or idempotency_key
+
     target_task_id = payload.task_id or payload.issue_id
     if not target_task_id:
         raise HTTPException(
@@ -83,61 +89,85 @@ async def create_run(
 
     task = await _get_or_create_task(db, target_task_id)
 
-    # Stable run identifier
-    run_id = f"run_{uuid4().hex}"
-    now = datetime.now(UTC)
-
-    new_run = ExecutionRun(
-        id=run_id,
-        task_id=task.id,
-        model_configuration_id=payload.model_configuration_id,
-        status=RunStatusEnum.PENDING.value,
-        model_provider=payload.model_provider,
-        iteration_count=0,
-        total_tokens=0,
-        prompt_tokens=0,
-        completion_tokens=0,
-        cost_estimate_usd=0.0,
-        current_step="INITIALIZED",
-        configuration_snapshot=payload.configuration_snapshot,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(new_run)
-
-    # Persist initial execution step
-    initial_step = AgentStep(
-        id=str(uuid4()),
-        run_id=run_id,
-        step_number=1,
-        step_name="INITIALIZED",
-        status="COMPLETED",
-        thought="Run initialized in PENDING state; awaiting orchestration dispatch.",
-        created_at=now,
-    )
-    db.add(initial_step)
-
-    # Persist audit event
-    audit = AuditEvent(
-        id=str(uuid4()),
-        run_id=run_id,
-        action="RUN_STARTED",
-        actor=client.client_id,
-        resource_type="ExecutionRun",
-        resource_id=run_id,
-        details={
-            "task_id": task.id,
+    with trace_span(
+        "run.create",
+        attributes={
+            "task.id": task.id,
             "model_provider": payload.model_provider,
-            "status": "PENDING",
+            "idempotency_key": effective_idempotency_key or "",
         },
-        created_at=now,
-    )
-    db.add(audit)
+    ):
+        # 1. Idempotency Check: if key provided, check if run already launched
+        if effective_idempotency_key:
+            existing_runs = await db.execute(
+                select(ExecutionRun).where(ExecutionRun.task_id == task.id)
+            )
+            for r in existing_runs.scalars().all():
+                if (
+                    r.configuration_snapshot
+                    and r.configuration_snapshot.get("idempotency_key") == effective_idempotency_key
+                ):
+                    return RunResponse.model_validate(r)
 
-    await db.commit()
-    await db.refresh(new_run)
+        # Stable run identifier
+        run_id = f"run_{uuid4().hex}"
+        now = datetime.now(UTC)
 
-    return RunResponse.model_validate(new_run)
+        snapshot = dict(payload.configuration_snapshot) if payload.configuration_snapshot else {}
+        if effective_idempotency_key:
+            snapshot["idempotency_key"] = effective_idempotency_key
+
+        new_run = ExecutionRun(
+            id=run_id,
+            task_id=task.id,
+            model_configuration_id=payload.model_configuration_id,
+            status=RunStatusEnum.PENDING.value,
+            model_provider=payload.model_provider,
+            iteration_count=0,
+            total_tokens=0,
+            prompt_tokens=0,
+            completion_tokens=0,
+            cost_estimate_usd=0.0,
+            current_step="INITIALIZED",
+            configuration_snapshot=snapshot,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(new_run)
+
+        # Persist initial execution step
+        initial_step = AgentStep(
+            id=str(uuid4()),
+            run_id=run_id,
+            step_number=1,
+            step_name="INITIALIZED",
+            status="COMPLETED",
+            thought="Run initialized in PENDING state; awaiting orchestration dispatch.",
+            created_at=now,
+        )
+        db.add(initial_step)
+
+        # Persist audit event
+        audit = AuditEvent(
+            id=str(uuid4()),
+            run_id=run_id,
+            action="RUN_STARTED",
+            actor=client.client_id,
+            resource_type="ExecutionRun",
+            resource_id=run_id,
+            details={
+                "task_id": task.id,
+                "model_provider": payload.model_provider,
+                "status": "PENDING",
+            },
+            created_at=now,
+        )
+        db.add(audit)
+
+        await db.commit()
+        await db.refresh(new_run)
+
+        return RunResponse.model_validate(new_run)
 
 
 @router.get("", response_model=list[RunResponse])
@@ -290,38 +320,42 @@ async def cancel_run(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
 ) -> RunResponse:
-    """Cancel an active execution run with strict state transition enforcement."""
-    stmt = select(ExecutionRun).where(ExecutionRun.id == run_id)
-    res = await db.execute(stmt)
-    run = res.scalar_one_or_none()
+    """Cancel an active execution run with strict state transition and cancellation propagation."""
+    with trace_span("run.cancel", attributes={"run.id": run_id}):
+        stmt = select(ExecutionRun).where(ExecutionRun.id == run_id)
+        res = await db.execute(stmt)
+        run = res.scalar_one_or_none()
 
-    if not run:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Run '{run_id}' not found.",
+        if not run:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Run '{run_id}' not found.",
+            )
+
+        # Validate state transition: terminal states must fail
+        validate_run_transition(run.status, RunStatusEnum.CANCELLED)
+
+        # Propagate cancellation to active runner in ExecutionRegistry
+        ExecutionRegistry.get_instance().cancel(run_id)
+
+        now = datetime.now(UTC)
+        run.status = RunStatusEnum.CANCELLED.value
+        run.completed_at = now
+        run.updated_at = now
+
+        audit = AuditEvent(
+            id=str(uuid4()),
+            run_id=run.id,
+            action="RUN_CANCELLED",
+            actor=client.client_id,
+            resource_type="ExecutionRun",
+            resource_id=run.id,
+            details={"status": "CANCELLED"},
+            created_at=now,
         )
+        db.add(audit)
 
-    # Validate state transition: terminal states must fail
-    validate_run_transition(run.status, RunStatusEnum.CANCELLED)
+        await db.commit()
+        await db.refresh(run)
 
-    now = datetime.now(UTC)
-    run.status = RunStatusEnum.CANCELLED.value
-    run.completed_at = now
-    run.updated_at = now
-
-    audit = AuditEvent(
-        id=str(uuid4()),
-        run_id=run.id,
-        action="RUN_CANCELLED",
-        actor=client.client_id,
-        resource_type="ExecutionRun",
-        resource_id=run.id,
-        details={"status": "CANCELLED"},
-        created_at=now,
-    )
-    db.add(audit)
-
-    await db.commit()
-    await db.refresh(run)
-
-    return RunResponse.model_validate(run)
+        return RunResponse.model_validate(run)

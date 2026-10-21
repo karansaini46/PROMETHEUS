@@ -27,6 +27,7 @@ from prometheus_ai.execution.git_manager import GitManager
 from prometheus_ai.execution.sandbox import BaseSandboxRunner
 from prometheus_ai.models.provider import BaseModelProvider
 from prometheus_ai.tools.execution import RunAllowlistedTestsTool
+from services.api.telemetry import trace_span_async
 
 logger = logging.getLogger(__name__)
 
@@ -96,43 +97,51 @@ class DebuggingWorkflow:
 
         state.status = WorkflowStatus.RUNNING
 
-        try:
-            match state.current_step:
-                case WorkflowStep.VALIDATE_TASK:
-                    await self._step_validate_task(state)
-                case WorkflowStep.INSPECT_REPO:
-                    await self._step_inspect_repo(state)
-                case WorkflowStep.SEARCH_CODE:
-                    await self._step_search_code(state)
-                case WorkflowStep.HYPOTHESIZE:
-                    await self._step_hypothesize(state)
-                case WorkflowStep.PLAN_INVESTIGATION:
-                    await self._step_plan_investigation(state)
-                case WorkflowStep.EXECUTE_INSPECTION:
-                    await self._step_execute_inspection(state)
-                case WorkflowStep.ANALYZE_EVIDENCE:
-                    await self._step_analyze_evidence(state)
-                case WorkflowStep.PROPOSE_PATCH:
-                    await self._step_propose_patch(state, custom_patch=custom_patch)
-                case WorkflowStep.APPLY_PATCH:
-                    await self._step_apply_patch(state)
-                case WorkflowStep.RUN_TESTS:
-                    await self._step_run_tests(state)
-                case WorkflowStep.ANALYZE_TESTS:
-                    await self._step_analyze_tests(state)
-                case WorkflowStep.REVIEW_DIFF:
-                    await self._step_review_diff(state)
-                case WorkflowStep.GENERATE_REPORT:
-                    await self._step_generate_report(state)
-                case WorkflowStep.TERMINAL:
-                    state.status = WorkflowStatus.COMPLETED
+        async with trace_span_async(
+            "workflow.step",
+            attributes={
+                "workflow.run_id": state.run_id,
+                "workflow.step": state.current_step.value,
+                "workflow.iteration": state.iteration,
+            },
+        ):
+            try:
+                match state.current_step:
+                    case WorkflowStep.VALIDATE_TASK:
+                        await self._step_validate_task(state)
+                    case WorkflowStep.INSPECT_REPO:
+                        await self._step_inspect_repo(state)
+                    case WorkflowStep.SEARCH_CODE:
+                        await self._step_search_code(state)
+                    case WorkflowStep.HYPOTHESIZE:
+                        await self._step_hypothesize(state)
+                    case WorkflowStep.PLAN_INVESTIGATION:
+                        await self._step_plan_investigation(state)
+                    case WorkflowStep.EXECUTE_INSPECTION:
+                        await self._step_execute_inspection(state)
+                    case WorkflowStep.ANALYZE_EVIDENCE:
+                        await self._step_analyze_evidence(state)
+                    case WorkflowStep.PROPOSE_PATCH:
+                        await self._step_propose_patch(state, custom_patch=custom_patch)
+                    case WorkflowStep.APPLY_PATCH:
+                        await self._step_apply_patch(state)
+                    case WorkflowStep.RUN_TESTS:
+                        await self._step_run_tests(state)
+                    case WorkflowStep.ANALYZE_TESTS:
+                        await self._step_analyze_tests(state)
+                    case WorkflowStep.REVIEW_DIFF:
+                        await self._step_review_diff(state)
+                    case WorkflowStep.GENERATE_REPORT:
+                        await self._step_generate_report(state)
+                    case WorkflowStep.TERMINAL:
+                        state.status = WorkflowStatus.COMPLETED
 
-        except Exception as err:
-            logger.exception("Workflow step failed: %s", err)
-            state.status = WorkflowStatus.FAILED
-            state.error = str(err)
-            state.current_step = WorkflowStep.TERMINAL
-            state.record_event(state.current_step, {"error": str(err)}, error=str(err))
+            except Exception as err:
+                logger.exception("Workflow step failed: %s", err)
+                state.status = WorkflowStatus.FAILED
+                state.error = str(err)
+                state.current_step = WorkflowStep.TERMINAL
+                state.record_event(state.current_step, {"error": str(err)}, error=str(err))
 
         self.checkpointer.save(state)
         return state

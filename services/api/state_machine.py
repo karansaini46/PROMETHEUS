@@ -7,6 +7,7 @@ Invalid transitions immediately fail with explicit errors.
 from typing import Any
 
 from services.api.models import RunStatusEnum, TaskStatusEnum
+from services.api.telemetry import trace_span
 
 
 class InvalidStateTransitionError(ValueError):
@@ -79,46 +80,54 @@ def validate_run_transition(
     Raises:
         InvalidStateTransitionError: If the transition is illegal.
     """
-    try:
-        curr = (
-            current_status
-            if isinstance(current_status, RunStatusEnum)
-            else RunStatusEnum(current_status)
-        )
-    except ValueError as err:
-        raise ValueError(f"Unknown current Run status: '{current_status}'") from err
+    with trace_span(
+        "state_machine.run_transition",
+        attributes={
+            "transition.from": str(current_status),
+            "transition.to": str(target_status),
+            "entity": "ExecutionRun",
+        },
+    ):
+        try:
+            curr = (
+                current_status
+                if isinstance(current_status, RunStatusEnum)
+                else RunStatusEnum(current_status)
+            )
+        except ValueError as err:
+            raise ValueError(f"Unknown current Run status: '{current_status}'") from err
 
-    try:
-        target = (
-            target_status
-            if isinstance(target_status, RunStatusEnum)
-            else RunStatusEnum(target_status)
-        )
-    except ValueError as err:
-        raise ValueError(f"Unknown target Run status: '{target_status}'") from err
+        try:
+            target = (
+                target_status
+                if isinstance(target_status, RunStatusEnum)
+                else RunStatusEnum(target_status)
+            )
+        except ValueError as err:
+            raise ValueError(f"Unknown target Run status: '{target_status}'") from err
 
-    # Terminal states cannot transition to any state, including themselves
-    terminal_states = {RunStatusEnum.RESOLVED, RunStatusEnum.FAILED, RunStatusEnum.CANCELLED}
-    if curr in terminal_states:
-        raise InvalidStateTransitionError(
-            current_status=curr.value,
-            target_status=target.value,
-            entity_name="ExecutionRun",
-            allowed_transitions=set(),
-        )
+        # Terminal states cannot transition to any state, including themselves
+        terminal_states = {RunStatusEnum.RESOLVED, RunStatusEnum.FAILED, RunStatusEnum.CANCELLED}
+        if curr in terminal_states:
+            raise InvalidStateTransitionError(
+                current_status=curr.value,
+                target_status=target.value,
+                entity_name="ExecutionRun",
+                allowed_transitions=set(),
+            )
 
-    # Non-terminal idempotent same-state check
-    if curr == target:
-        return
+        # Non-terminal idempotent same-state check
+        if curr == target:
+            return
 
-    allowed = RUN_TRANSITIONS.get(curr, set())
-    if target not in allowed:
-        raise InvalidStateTransitionError(
-            current_status=curr.value,
-            target_status=target.value,
-            entity_name="ExecutionRun",
-            allowed_transitions={t.value for t in allowed},
-        )
+        allowed = RUN_TRANSITIONS.get(curr, set())
+        if target not in allowed:
+            raise InvalidStateTransitionError(
+                current_status=curr.value,
+                target_status=target.value,
+                entity_name="ExecutionRun",
+                allowed_transitions={t.value for t in allowed},
+            )
 
 
 # ==============================================================================
@@ -143,32 +152,40 @@ def validate_task_transition(
     current_status: TaskStatusEnum | str, target_status: TaskStatusEnum | str
 ) -> None:
     """Validate task lifecycle state transitions."""
-    try:
-        curr = (
-            current_status
-            if isinstance(current_status, TaskStatusEnum)
-            else TaskStatusEnum(current_status)
-        )
-    except ValueError as err:
-        raise ValueError(f"Unknown current Task status: '{current_status}'") from err
+    with trace_span(
+        "state_machine.task_transition",
+        attributes={
+            "transition.from": str(current_status),
+            "transition.to": str(target_status),
+            "entity": "Task",
+        },
+    ):
+        try:
+            curr = (
+                current_status
+                if isinstance(current_status, TaskStatusEnum)
+                else TaskStatusEnum(current_status)
+            )
+        except ValueError as err:
+            raise ValueError(f"Unknown current Task status: '{current_status}'") from err
 
-    try:
-        target = (
-            target_status
-            if isinstance(target_status, TaskStatusEnum)
-            else TaskStatusEnum(target_status)
-        )
-    except ValueError as err:
-        raise ValueError(f"Unknown target Task status: '{target_status}'") from err
+        try:
+            target = (
+                target_status
+                if isinstance(target_status, TaskStatusEnum)
+                else TaskStatusEnum(target_status)
+            )
+        except ValueError as err:
+            raise ValueError(f"Unknown target Task status: '{target_status}'") from err
 
-    if curr == target:
-        return
+        if curr == target:
+            return
 
-    allowed = TASK_TRANSITIONS.get(curr, set())
-    if target not in allowed:
-        raise InvalidStateTransitionError(
-            current_status=curr.value,
-            target_status=target.value,
-            entity_name="Task",
-            allowed_transitions={t.value for t in allowed},
-        )
+        allowed = TASK_TRANSITIONS.get(curr, set())
+        if target not in allowed:
+            raise InvalidStateTransitionError(
+                current_status=curr.value,
+                target_status=target.value,
+                entity_name="Task",
+                allowed_transitions={t.value for t in allowed},
+            )

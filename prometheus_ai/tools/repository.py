@@ -4,6 +4,7 @@ from typing import Any
 
 from prometheus_ai.execution.git_manager import GitManager
 from prometheus_ai.tools.base import BaseTool, ToolDefinition
+from services.api.telemetry import trace_span_async
 
 
 class RegisterRepositoryTool(BaseTool):
@@ -128,19 +129,20 @@ class ReadBoundedFileTool(BaseTool):
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
-        repo_path = str(kwargs.get("repo_path", ""))
-        file_path = str(kwargs.get("file_path", ""))
-        start_line = int(kwargs.get("start_line", 1))
-        end_line_val = kwargs.get("end_line")
-        end_line = int(end_line_val) if end_line_val is not None else None
-        max_bytes = int(kwargs.get("max_bytes", 100000))
-        return self.git_manager.read_bounded_file(
-            repo_or_worktree_path=repo_path,
-            file_path=file_path,
-            start_line=start_line,
-            end_line=end_line,
-            max_bytes=max_bytes,
-        )
+        async with trace_span_async("tool.call", attributes={"tool.name": "read_bounded_file"}):
+            repo_path = str(kwargs.get("repo_path", ""))
+            file_path = str(kwargs.get("file_path", ""))
+            start_line = int(kwargs.get("start_line", 1))
+            end_line_val = kwargs.get("end_line")
+            end_line = int(end_line_val) if end_line_val is not None else None
+            max_bytes = int(kwargs.get("max_bytes", 100000))
+            return self.git_manager.read_bounded_file(
+                repo_or_worktree_path=repo_path,
+                file_path=file_path,
+                start_line=start_line,
+                end_line=end_line,
+                max_bytes=max_bytes,
+            )
 
 
 class SearchSourceCodeTool(BaseTool):
@@ -375,16 +377,17 @@ class ApplyPatchTool(BaseTool):
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
-        worktree_path = str(kwargs.get("worktree_path", ""))
-        patch_content = str(kwargs.get("patch_content", ""))
-        check_only = bool(kwargs.get("check_only", False))
-        res = self.git_manager.apply_patch(
-            worktree_path=worktree_path,
-            patch_content=patch_content,
-            check_only=check_only,
-        )
-        return {
-            "success": res.success,
-            "applied_files": res.applied_files,
-            "error_message": res.error_message,
-        }
+        async with trace_span_async("tool.call", attributes={"tool.name": "apply_patch"}):
+            worktree_path = str(kwargs.get("worktree_path", ""))
+            patch_content = str(kwargs.get("patch_content", ""))
+            check_only = bool(kwargs.get("check_only", False))
+            res = self.git_manager.apply_patch(
+                worktree_path=worktree_path,
+                patch_content=patch_content,
+                check_only=check_only,
+            )
+            return {
+                "success": res.success,
+                "applied_files": res.applied_files,
+                "error_message": res.error_message,
+            }
