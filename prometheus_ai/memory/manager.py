@@ -361,8 +361,15 @@ class MemoryManager:
 
         # 4. Ranking (Semantic + Lexical + Confidence)
         if not query:
-            # If no query string, rank primarily by confidence and freshness
-            filtered.sort(key=lambda r: (r.confidence, r.created_at), reverse=True)
+            # If no query string, rank primarily by project specificity, confidence, and freshness
+            filtered.sort(
+                key=lambda r: (
+                    1 if (project_id and r.project_id == project_id) else 0,
+                    r.confidence,
+                    r.created_at,
+                ),
+                reverse=True,
+            )
             return filtered[:limit]
 
         query_tokens = set(query.lower().split())

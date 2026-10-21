@@ -1,6 +1,7 @@
 """Health and readiness system status check endpoints."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 import docker
 from fastapi import APIRouter, Response, status
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 
 from services.api.config import get_settings
 from services.api.db import check_db_health
+from services.api.worker import WorkerManager
 
 router = APIRouter(tags=["Health"])
 settings = get_settings()
@@ -22,6 +24,7 @@ class HealthResponse(BaseModel):
     timestamp: str
     database: str
     sandbox_available: bool
+    worker: dict[str, Any] | None = None
 
 
 class ReadinessResponse(BaseModel):
@@ -29,6 +32,7 @@ class ReadinessResponse(BaseModel):
 
     ready: bool
     database: str
+    worker_healthy: bool
     timestamp: str
 
 
@@ -46,8 +50,10 @@ async def get_health() -> HealthResponse:
     """Return platform subsystem health metrics."""
     db_ok = await check_db_health()
     sandbox_ok = is_sandbox_available()
+    worker_metrics = WorkerManager.get_instance().get_health_metrics()
 
-    overall_status = "healthy" if db_ok else "degraded"
+    worker_ok = worker_metrics.get("healthy", False)
+    overall_status = "healthy" if (db_ok and worker_ok) else "degraded"
 
     return HealthResponse(
         status=overall_status,
@@ -56,7 +62,14 @@ async def get_health() -> HealthResponse:
         timestamp=datetime.now(UTC).isoformat(),
         database="connected" if db_ok else "disconnected",
         sandbox_available=sandbox_ok,
+        worker=worker_metrics,
     )
+
+
+@router.get("/health/worker")
+async def get_worker_health() -> dict[str, Any]:
+    """Return dedicated worker supervisor and heartbeat health status."""
+    return WorkerManager.get_instance().get_health_metrics()
 
 
 @router.get(
@@ -70,6 +83,8 @@ async def get_health() -> HealthResponse:
 async def get_readiness(response: Response) -> ReadinessResponse:
     """Return platform readiness probe for load balancers and orchestrators."""
     db_ok = await check_db_health()
+    worker_metrics = WorkerManager.get_instance().get_health_metrics()
+    worker_healthy = worker_metrics.get("healthy", False)
     now_str = datetime.now(UTC).isoformat()
 
     if not db_ok:
@@ -77,11 +92,13 @@ async def get_readiness(response: Response) -> ReadinessResponse:
         return ReadinessResponse(
             ready=False,
             database="disconnected",
+            worker_healthy=worker_healthy,
             timestamp=now_str,
         )
 
     return ReadinessResponse(
         ready=True,
         database="connected",
+        worker_healthy=worker_healthy,
         timestamp=now_str,
     )

@@ -1,0 +1,8 @@
+# GitGuardian configuration
+# https://docs.gitguardian.com/ggshield-docs/reference/configuration
+
+version: 2
+paths-ignore:
+  - "tests/**"
+  - "**/tests/**"
+  - "docs/**"

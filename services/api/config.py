@@ -142,6 +142,32 @@ class Settings(BaseSettings):
         description="Enable OpenTelemetry remote span exporting",
     )
 
+    # Reliability & Edge Security Controls
+    REQUEST_TIMEOUT_SECONDS: float = Field(
+        default=60.0,
+        description="Per-request gateway timeout in seconds for incoming HTTP calls",
+    )
+    RATE_LIMIT_PER_MINUTE: int = Field(
+        default=300,
+        description="Max API requests allowed per client IP/token per minute",
+    )
+    MAX_REQUEST_BODY_BYTES: int = Field(
+        default=10_000_000,
+        description="Maximum permitted request body size in bytes (10MB)",
+    )
+    ADMIN_SECRET_KEY: str = Field(
+        default="dev-admin-secret-key-replace-with-secure-value-min-32-chars",
+        description="Dedicated administrative authentication key",
+    )
+    REQUIRE_AUTH: bool = Field(
+        default=False,
+        description="Strictly require authentication even in local development",
+    )
+    REQUIRE_APPROVAL_FOR_DESTRUCTIVE: bool = Field(
+        default=True,
+        description="Require explicit human/admin approval for destructive or deployment operations",
+    )
+
     @field_validator("API_SECRET_KEY")
     @classmethod
     def validate_secret_key(cls, v: str, info: object) -> str:

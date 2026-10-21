@@ -29,6 +29,7 @@ from prometheus_ai.learning.lab.metrics import (
     get_peak_memory_mb,
 )
 from prometheus_ai.learning.lab.tokenizer import BaseTokenizer
+from services.api.telemetry import traced
 
 
 class TrainingInterruptedError(Exception):
@@ -164,6 +165,7 @@ class LabTrainer:
         self.best_val_loss = float("inf")
         self.best_checkpoint_path: Path | None = None
 
+    @traced(span_name="training.job")
     def train(self, resume_from: Path | str | None = None) -> TrainingSummary:
         """Run the small-model training loop up to configured max_steps or max_epochs."""
         if resume_from and self.checkpoint_manager:

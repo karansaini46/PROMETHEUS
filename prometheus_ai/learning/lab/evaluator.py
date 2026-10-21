@@ -20,12 +20,14 @@ from prometheus_ai.learning.lab.metrics import (
     get_peak_memory_mb,
 )
 from prometheus_ai.learning.lab.tokenizer import BaseTokenizer
+from services.api.telemetry import traced
 
 
 class LabEvaluator:
     """Evaluates transformer checkpoints and benchmarks inference performance."""
 
     @staticmethod
+    @traced(span_name="evaluation.job")
     @torch.no_grad()
     def evaluate(
         model: nn.Module,
@@ -101,6 +103,7 @@ class LabEvaluator:
         )
 
     @staticmethod
+    @traced(span_name="evaluation.benchmark")
     @torch.no_grad()
     def benchmark_inference(
         model: nn.Module,

@@ -4,7 +4,7 @@ import math
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ from services.api.schemas import (
 )
 from services.api.security import AuthenticatedClient, verify_api_key
 from services.api.state_machine import validate_task_transition
+from services.api.telemetry import trace_span
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -34,74 +35,121 @@ async def create_task(
     payload: TaskCreateRequest,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
+    x_idempotency_key: Annotated[str | None, Header(alias="X-Idempotency-Key")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> TaskResponse:
-    """Register a new software engineering task or bug report."""
-    # Verify project exists or auto-provision default project if it matches default/demo
-    proj_stmt = select(Project).where(Project.id == payload.project_id)
-    proj_res = await db.execute(proj_stmt)
-    project = proj_res.scalar_one_or_none()
+    """Register a new software engineering task or bug report with idempotency and tracing."""
+    effective_idempotency_key = x_idempotency_key or idempotency_key
 
-    if not project:
-        # Check if looking for default project or create placeholder project
-        proj_by_slug = await db.execute(select(Project).where(Project.slug == payload.project_id))
-        project = proj_by_slug.scalar_one_or_none()
+    with trace_span(
+        "task.create",
+        attributes={
+            "task.title": payload.title,
+            "task.type": payload.task_type.value,
+            "project.id": payload.project_id,
+            "idempotency_key": effective_idempotency_key or "",
+        },
+    ):
+        # 1. Idempotency Check: if key provided, check for existing task
+        if effective_idempotency_key:
+            existing_tasks = await db.execute(
+                select(Task).where(Task.project_id == payload.project_id)
+            )
+            for t in existing_tasks.scalars().all():
+                if (
+                    t.metadata_json
+                    and t.metadata_json.get("idempotency_key") == effective_idempotency_key
+                ):
+                    return TaskResponse(
+                        id=t.id,
+                        project_id=t.project_id,
+                        repository_id=t.repository_id,
+                        title=t.title,
+                        problem_statement=t.problem_statement,
+                        task_type=t.task_type,
+                        status=t.status,
+                        priority=t.priority,
+                        base_commit=t.base_commit,
+                        reproduce_command=t.reproduce_command,
+                        metadata=t.metadata_json or {},
+                        created_at=t.created_at,
+                        updated_at=t.updated_at,
+                        runs_count=len(t.execution_runs) if t.execution_runs else 0,
+                        latest_run_status=(
+                            t.execution_runs[-1].status if t.execution_runs else None
+                        ),
+                    )
+
+        # 2. Verify project exists or auto-provision default project if it matches default/demo
+        proj_stmt = select(Project).where(Project.id == payload.project_id)
+        proj_res = await db.execute(proj_stmt)
+        project = proj_res.scalar_one_or_none()
 
         if not project:
-            # Create project automatically if ID does not exist yet to facilitate seamless bootstrap
-            project = Project(
-                id=payload.project_id,
-                name=f"Project {payload.project_id}",
-                slug=f"proj-{payload.project_id[:8]}",
-                repository_url="https://github.com/prometheus/default.git",
+            proj_by_slug = await db.execute(
+                select(Project).where(Project.slug == payload.project_id)
             )
-            db.add(project)
-            await db.flush()
+            project = proj_by_slug.scalar_one_or_none()
 
-    task = Task(
-        id=str(uuid4()),
-        project_id=project.id,
-        repository_id=payload.repository_id,
-        title=payload.title,
-        problem_statement=payload.problem_statement,
-        task_type=payload.task_type.value,
-        status=TaskStatusEnum.OPEN.value,
-        priority=payload.priority.value,
-        base_commit=payload.base_commit,
-        reproduce_command=payload.reproduce_command,
-        metadata_json=payload.metadata,
-    )
-    db.add(task)
+            if not project:
+                project = Project(
+                    id=payload.project_id,
+                    name=f"Project {payload.project_id}",
+                    slug=f"proj-{payload.project_id[:8]}",
+                    repository_url="https://github.com/prometheus/default.git",
+                )
+                db.add(project)
+                await db.flush()
 
-    audit = AuditEvent(
-        id=str(uuid4()),
-        action="TASK_CREATED",
-        actor=client.client_id,
-        resource_type="Task",
-        resource_id=task.id,
-        details={"title": task.title, "task_type": task.task_type},
-    )
-    db.add(audit)
+        metadata_dict = dict(payload.metadata) if payload.metadata else {}
+        if effective_idempotency_key:
+            metadata_dict["idempotency_key"] = effective_idempotency_key
 
-    await db.commit()
-    await db.refresh(task)
+        task = Task(
+            id=str(uuid4()),
+            project_id=project.id,
+            repository_id=payload.repository_id,
+            title=payload.title,
+            problem_statement=payload.problem_statement,
+            task_type=payload.task_type.value,
+            status=TaskStatusEnum.OPEN.value,
+            priority=payload.priority.value,
+            base_commit=payload.base_commit,
+            reproduce_command=payload.reproduce_command,
+            metadata_json=metadata_dict,
+        )
+        db.add(task)
 
-    return TaskResponse(
-        id=task.id,
-        project_id=task.project_id,
-        repository_id=task.repository_id,
-        title=task.title,
-        problem_statement=task.problem_statement,
-        task_type=task.task_type,
-        status=task.status,
-        priority=task.priority,
-        base_commit=task.base_commit,
-        reproduce_command=task.reproduce_command,
-        metadata=task.metadata_json or {},
-        created_at=task.created_at,
-        updated_at=task.updated_at,
-        runs_count=0,
-        latest_run_status=None,
-    )
+        audit = AuditEvent(
+            id=str(uuid4()),
+            action="TASK_CREATED",
+            actor=client.client_id,
+            resource_type="Task",
+            resource_id=task.id,
+            details={"title": task.title, "task_type": task.task_type},
+        )
+        db.add(audit)
+
+        await db.commit()
+        await db.refresh(task)
+
+        return TaskResponse(
+            id=task.id,
+            project_id=task.project_id,
+            repository_id=task.repository_id,
+            title=task.title,
+            problem_statement=task.problem_statement,
+            task_type=task.task_type,
+            status=task.status,
+            priority=task.priority,
+            base_commit=task.base_commit,
+            reproduce_command=task.reproduce_command,
+            metadata=task.metadata_json or {},
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+            runs_count=0,
+            latest_run_status=None,
+        )
 
 
 @router.get("", response_model=PaginatedResponse[TaskResponse])
@@ -222,61 +270,62 @@ async def update_task(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
 ) -> TaskResponse:
-    """Update task details with state transition validation."""
-    stmt = select(Task).where(Task.id == task_id)
-    res = await db.execute(stmt)
-    task = res.scalar_one_or_none()
+    """Update task details with state transition validation and tracing."""
+    with trace_span("task.update", attributes={"task.id": task_id}):
+        stmt = select(Task).where(Task.id == task_id)
+        res = await db.execute(stmt)
+        task = res.scalar_one_or_none()
 
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task '{task_id}' not found.",
+        if not task:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Task '{task_id}' not found.",
+            )
+
+        if payload.status is not None:
+            validate_task_transition(task.status, payload.status)
+            task.status = payload.status.value
+
+        if payload.title is not None:
+            task.title = payload.title
+        if payload.problem_statement is not None:
+            task.problem_statement = payload.problem_statement
+        if payload.priority is not None:
+            task.priority = payload.priority.value
+        if payload.base_commit is not None:
+            task.base_commit = payload.base_commit
+        if payload.reproduce_command is not None:
+            task.reproduce_command = payload.reproduce_command
+        if payload.metadata is not None:
+            task.metadata_json = payload.metadata
+
+        audit = AuditEvent(
+            id=str(uuid4()),
+            action="TASK_UPDATED",
+            actor=client.client_id,
+            resource_type="Task",
+            resource_id=task.id,
+            details={"status": task.status},
         )
+        db.add(audit)
 
-    if payload.status is not None:
-        validate_task_transition(task.status, payload.status)
-        task.status = payload.status.value
+        await db.commit()
+        await db.refresh(task)
 
-    if payload.title is not None:
-        task.title = payload.title
-    if payload.problem_statement is not None:
-        task.problem_statement = payload.problem_statement
-    if payload.priority is not None:
-        task.priority = payload.priority.value
-    if payload.base_commit is not None:
-        task.base_commit = payload.base_commit
-    if payload.reproduce_command is not None:
-        task.reproduce_command = payload.reproduce_command
-    if payload.metadata is not None:
-        task.metadata_json = payload.metadata
-
-    audit = AuditEvent(
-        id=str(uuid4()),
-        action="TASK_UPDATED",
-        actor=client.client_id,
-        resource_type="Task",
-        resource_id=task.id,
-        details={"status": task.status},
-    )
-    db.add(audit)
-
-    await db.commit()
-    await db.refresh(task)
-
-    return TaskResponse(
-        id=task.id,
-        project_id=task.project_id,
-        repository_id=task.repository_id,
-        title=task.title,
-        problem_statement=task.problem_statement,
-        task_type=task.task_type,
-        status=task.status,
-        priority=task.priority,
-        base_commit=task.base_commit,
-        reproduce_command=task.reproduce_command,
-        metadata=task.metadata_json or {},
-        created_at=task.created_at,
-        updated_at=task.updated_at,
-        runs_count=len(task.execution_runs) if task.execution_runs else 0,
-        latest_run_status=(task.execution_runs[-1].status if task.execution_runs else None),
-    )
+        return TaskResponse(
+            id=task.id,
+            project_id=task.project_id,
+            repository_id=task.repository_id,
+            title=task.title,
+            problem_statement=task.problem_statement,
+            task_type=task.task_type,
+            status=task.status,
+            priority=task.priority,
+            base_commit=task.base_commit,
+            reproduce_command=task.reproduce_command,
+            metadata=task.metadata_json or {},
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+            runs_count=len(task.execution_runs) if task.execution_runs else 0,
+            latest_run_status=(task.execution_runs[-1].status if task.execution_runs else None),
+        )

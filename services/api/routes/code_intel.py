@@ -1,6 +1,5 @@
 """Code Intelligence API Routes for repository indexing, search, and impact analysis."""
 
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
@@ -9,6 +8,7 @@ from pydantic import BaseModel, Field
 from prometheus_ai.code_intel.analysis import CodeAnalyzer
 from prometheus_ai.code_intel.indexer import CodeIntelligenceIndex
 from prometheus_ai.code_intel.search import CodeSearchEngine
+from prometheus_ai.execution.guards import validate_safe_repo_dir
 from services.api.security import AuthenticatedClient, verify_api_key
 
 router = APIRouter(prefix="/code-intel", tags=["Code Intelligence"])
@@ -18,11 +18,12 @@ _active_indices: dict[str, CodeIntelligenceIndex] = {}
 
 
 def get_or_create_index(repo_path: str) -> CodeIntelligenceIndex:
-    """Retrieve or instantiate an index for a canonical repository path."""
-    resolved = str(Path(repo_path).resolve())
-    if resolved not in _active_indices:
-        _active_indices[resolved] = CodeIntelligenceIndex(resolved)
-    return _active_indices[resolved]
+    """Retrieve or instantiate an index for a canonical validated repository path."""
+    resolved_path = validate_safe_repo_dir(repo_path)
+    resolved_str = str(resolved_path)
+    if resolved_str not in _active_indices:
+        _active_indices[resolved_str] = CodeIntelligenceIndex(resolved_path)
+    return _active_indices[resolved_str]
 
 
 class IndexRequest(BaseModel):
@@ -49,7 +50,7 @@ async def trigger_indexing(
 @router.get("/status")
 async def get_index_status(
     repo_path: Annotated[str, Query(description="Repository path to check")],
-    client: Annotated[AuthenticatedClient | None, Depends(verify_api_key)] = None,
+    client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
 ) -> dict[str, Any]:
     """Inspect current indexing progress, file counts, and failure errors."""
     index = get_or_create_index(repo_path)
@@ -64,9 +65,9 @@ async def get_index_status(
 async def search_code(
     repo_path: Annotated[str, Query(description="Repository path")],
     query: Annotated[str, Query(description="Search query string")],
+    client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
     mode: Annotated[str, Query(description="Search mode: lexical, semantic, hybrid")] = "hybrid",
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
-    client: Annotated[AuthenticatedClient | None, Depends(verify_api_key)] = None,
 ) -> dict[str, Any]:
     """Perform lexical, semantic, or hybrid code search across the index."""
     index = get_or_create_index(repo_path)
@@ -103,7 +104,7 @@ async def search_code(
 async def lookup_symbols(
     repo_path: Annotated[str, Query(description="Repository path")],
     name: Annotated[str, Query(description="Symbol name to look up")],
-    client: Annotated[AuthenticatedClient | None, Depends(verify_api_key)] = None,
+    client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
 ) -> dict[str, Any]:
     """Look up definitions and references for a symbol."""
     index = get_or_create_index(repo_path)
@@ -123,7 +124,7 @@ async def lookup_symbols(
 async def analyze_impact(
     repo_path: Annotated[str, Query(description="Repository path")],
     files: Annotated[list[str], Query(description="List of modified files")],
-    client: Annotated[AuthenticatedClient | None, Depends(verify_api_key)] = None,
+    client: Annotated[AuthenticatedClient, Depends(verify_api_key)],
 ) -> dict[str, Any]:
     """Analyze cascading impact of modified files on dependent modules and tests."""
     index = get_or_create_index(repo_path)
