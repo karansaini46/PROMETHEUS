@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -56,7 +56,7 @@ export default function TaskWorkspacePage() {
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [dispatching, setDispatching] = useState(false);
 
-  const loadData = async (currentPage = page, status = statusFilter, query = searchQuery) => {
+  const loadData = useCallback(async (currentPage = 1, status = "", query = "") => {
     setLoading(true);
     setError(null);
     try {
@@ -77,22 +77,23 @@ export default function TaskWorkspacePage() {
       setProjects(projectsRes);
       setModels(modelsRes);
 
-      if (projectsRes.length > 0 && !formProjectId) {
-        setFormProjectId(projectsRes[0].id);
+      if (projectsRes.length > 0) {
+        setFormProjectId((prev) => prev || projectsRes[0].id);
       }
-      if (modelsRes.length > 0 && !selectedModel) {
-        setSelectedModel(modelsRes[0].provider + "/" + modelsRes[0].model_name);
+      if (modelsRes.length > 0) {
+        setSelectedModel((prev) => prev || modelsRes[0].provider + "/" + modelsRes[0].model_name);
       }
     } catch (err: any) {
       setError(err?.message || "Failed to load task workspace.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [pageSize]);
 
   useEffect(() => {
     loadData(1, statusFilter, searchQuery);
-  }, [statusFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, loadData]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -6,9 +6,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import docker
 from docker.errors import DockerException
 
+import docker
 from prometheus_ai.execution.guards import (
     PathTraversalError,
     SecurityException,
@@ -152,6 +152,7 @@ class DockerSandboxRunner(BaseSandboxRunner):
                 read_only=active_limits.read_only_rootfs,
                 tmpfs=tmpfs_config,
                 name=execution_id,
+                labels={"prometheus.sandbox": "true"},
                 detach=True,
             )
             self._active_containers[execution_id] = container

@@ -99,7 +99,7 @@ def create_app() -> FastAPI:
     # 5. CORS configuration
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -108,8 +108,11 @@ def create_app() -> FastAPI:
     # 6. Register safe exception handlers (no tracebacks or env leaks)
     register_exception_handlers(app)
 
-    # 7. Mount API v1 routes
+    # 7. Mount Health and Readiness probes at root and API v1
+    app.include_router(health_router)
     app.include_router(health_router, prefix="/api/v1")
+
+    # 8. Mount API v1 domain routes
     app.include_router(tasks_router, prefix="/api/v1")
     app.include_router(runs_router, prefix="/api/v1")
     app.include_router(models_router, prefix="/api/v1")

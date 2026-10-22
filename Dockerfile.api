@@ -1,0 +1,47 @@
+# ==============================================================================
+# PROMETHEUS API Server Containerfile
+# Hardened multi-stage non-root Python 3.12 container
+# ==============================================================================
+
+FROM python:3.12-slim AS base
+
+# Prevent python from writing pyc files and buffering stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install runtime system dependencies (git for code intelligence, curl for health probes)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root system user and group
+RUN groupadd -g 1000 prometheus && \
+    useradd -u 1000 -g prometheus -s /bin/bash -m prometheus
+
+WORKDIR /app
+
+# Install Python dependencies first for optimal Docker layer caching
+COPY pyproject.toml ./
+RUN pip install --upgrade pip && \
+    pip install --extra-index-url https://download.pytorch.org/whl/cpu -e ".[dev]"
+
+# Copy application source code
+COPY --chown=prometheus:prometheus . .
+
+# Ensure data directories exist and are writable by non-root user
+RUN mkdir -p /app/data/worktrees /app/artifacts && \
+    chown -R prometheus:prometheus /app/data /app/artifacts
+
+# Switch to unprivileged non-root user
+USER prometheus
+
+EXPOSE 8001
+
+# Healthcheck probe using root /health endpoint
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8001"]

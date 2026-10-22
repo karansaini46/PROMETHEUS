@@ -69,6 +69,10 @@ ignore = [
     "E501", # Line too long (handled by formatter)
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["E402"]
+"tests/*" = ["E402"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
@@ -89,6 +93,7 @@ warn_no_return = true
 
 [[tool.mypy.overrides]]
 module = [
+    "docker",
     "docker.*",
     "opentelemetry.*",
     "sqlalchemy.*",

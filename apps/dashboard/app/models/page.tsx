@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { createModel, getModels } from "../../lib/api";
 import { EmptyState, ErrorState, LoadingState } from "../components/UIStates";
 import type { ModelConfiguration } from "@prometheus/shared-types";
@@ -30,7 +30,7 @@ export default function ModelLaboratoryPage() {
   const [formInputCost, setFormInputCost] = useState(3.0);
   const [formOutputCost, setFormOutputCost] = useState(15.0);
 
-  const loadModels = async () => {
+  const loadModels = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -44,11 +44,11 @@ export default function ModelLaboratoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [providerFilter, activeOnly]);
 
   useEffect(() => {
     loadModels();
-  }, [providerFilter, activeOnly]);
+  }, [loadModels]);
 
   const handleCreateModel = async (e: React.FormEvent) => {
     e.preventDefault();

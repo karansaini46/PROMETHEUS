@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { cancelRun, getRuns } from "../../lib/api";
@@ -19,7 +19,7 @@ function RunsContent() {
   const [taskIdFilter, setTaskIdFilter] = useState<string>(initialTaskId);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  const loadRuns = async () => {
+  const loadRuns = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -33,11 +33,11 @@ function RunsContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [taskIdFilter, statusFilter]);
 
   useEffect(() => {
     loadRuns();
-  }, [statusFilter, taskIdFilter]);
+  }, [loadRuns]);
 
   const handleCancelRun = async (runId: string) => {
     if (!confirm(`Are you sure you want to cancel run ${runId}?`)) return;

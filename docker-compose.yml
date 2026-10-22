@@ -19,6 +19,85 @@ services:
     networks:
       - prometheus-network
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: prometheus-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://prometheus:prometheus@postgres:5432/prometheus_db
+      - PROMETHEUS_ENV=${PROMETHEUS_ENV:-development}
+      - API_HOST=0.0.0.0
+      - API_PORT=8001
+      - WORKTREE_BASE_DIR=/app/data/worktrees
+    ports:
+      - "8001:8001"
+    volumes:
+      - sandbox_worktrees:/app/data/worktrees
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - prometheus-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: prometheus-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://prometheus:prometheus@postgres:5432/prometheus_db
+      - PROMETHEUS_ENV=${PROMETHEUS_ENV:-development}
+      - WORKTREE_BASE_DIR=/app/data/worktrees
+    volumes:
+      - sandbox_worktrees:/app/data/worktrees
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - prometheus-network
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: prometheus-dashboard
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+      - PORT=3000
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - prometheus-network
+
   # Optional OpenTelemetry collector & Jaeger UI for local traces
   jaeger:
     image: jaegertracing/all-in-one:1.60
@@ -35,6 +114,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  sandbox_worktrees:
     driver: local
 
 networks:

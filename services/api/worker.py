@@ -16,10 +16,10 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import docker
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import docker
 from prometheus_ai.tools.execution import ExecutionRegistry
 from services.api.config import get_settings
 from services.api.models import (
@@ -226,3 +226,55 @@ def cleanup_abandoned_resources(worktree_dir: str | Path | None = None) -> dict[
         "cleaned_worktrees": cleaned_worktrees,
         "cleaned_containers": cleaned_containers,
     }
+
+
+async def run_standalone_worker() -> None:
+    """Run worker supervisor in standalone daemon mode."""
+    import signal
+
+    from services.api.db import AsyncSessionLocal
+    from services.api.logging_config import setup_logging
+
+    setup_logging(level=settings.LOG_LEVEL)
+    logger.info("Starting standalone PROMETHEUS background worker supervisor...")
+
+    worker = WorkerManager.get_instance()
+    await worker.start()
+
+    # Perform initial crash recovery
+    try:
+        async with AsyncSessionLocal() as session:
+            recovered = await recover_interrupted_tasks(session)
+            if recovered > 0:
+                logger.info("Standalone worker recovered %d interrupted tasks", recovered)
+    except Exception as exc:
+        logger.warning("Worker initial task recovery check failed: %s", exc)
+
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop_event.set)
+        except NotImplementedError:
+            pass
+
+    try:
+        # Periodic maintenance loop (prune abandoned worktrees/containers)
+        while not stop_event.is_set():
+            try:
+                cleanup_abandoned_resources()
+            except Exception as e:
+                logger.warning("Worker periodic cleanup encountered error: %s", e)
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=60.0)
+            except TimeoutError:
+                pass
+    finally:
+        logger.info("Shutting down standalone worker...")
+        await worker.stop(timeout_seconds=5.0)
+        logger.info("Standalone worker shutdown complete.")
+
+
+if __name__ == "__main__":
+    asyncio.run(run_standalone_worker())
