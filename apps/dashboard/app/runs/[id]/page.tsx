@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { cancelRun, getRun, getRunEvents } from "../../../lib/api";
@@ -24,7 +24,8 @@ export default function RunInspectorPage() {
   const [showPatchPreview, setShowPatchPreview] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  const loadRunData = async () => {
+  const loadRunData = useCallback(async () => {
+    if (!runId) return;
     setLoading(true);
     setError(null);
     try {
@@ -48,13 +49,13 @@ export default function RunInspectorPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [runId]);
 
   useEffect(() => {
     if (runId) {
       loadRunData();
     }
-  }, [runId]);
+  }, [runId, loadRunData]);
 
   const handleCancel = async () => {
     if (!run || !confirm(`Cancel execution run ${run.id}?`)) return;

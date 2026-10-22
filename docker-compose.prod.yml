@@ -1,0 +1,67 @@
+# ==============================================================================
+# PROMETHEUS Production Deployment Overlay (docker-compose.prod.yml)
+# Strict security hardening, resource boundaries, and unprivileged execution
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ==============================================================================
+
+services:
+  postgres:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4096M
+        reservations:
+          cpus: "1.0"
+          memory: 1024M
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    restart: always
+    environment:
+      - PROMETHEUS_ENV=production
+      - REQUIRE_AUTH=true
+      - REQUIRE_APPROVAL_FOR_DESTRUCTIVE=true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    restart: always
+    environment:
+      - PROMETHEUS_ENV=production
+      - REQUIRE_AUTH=true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
+
+  dashboard:
+    restart: always
+    environment:
+      - NODE_ENV=production
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true

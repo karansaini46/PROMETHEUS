@@ -18,3 +18,19 @@ async def test_health_endpoint(async_client: AsyncClient) -> None:
     assert "database" in data
     assert "sandbox_available" in data
     assert isinstance(data["sandbox_available"], bool)
+
+
+@pytest.mark.unit
+async def test_root_health_and_readiness_endpoints(async_client: AsyncClient) -> None:
+    """Test GET /health and GET /ready at root paths."""
+    health_resp = await async_client.get("/health")
+    assert health_resp.status_code == 200
+    assert health_resp.json()["status"] in ["healthy", "degraded"]
+
+    ready_resp = await async_client.get("/ready")
+    assert ready_resp.status_code in [200, 503]
+    assert "ready" in ready_resp.json()
+
+    worker_resp = await async_client.get("/health/worker")
+    assert worker_resp.status_code == 200
+    assert "status" in worker_resp.json()

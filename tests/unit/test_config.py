@@ -31,3 +31,44 @@ def test_invalid_pids_limit_rejected() -> None:
 
     with pytest.raises(ValidationError):
         Settings(SANDBOX_PIDS_LIMIT=50000)
+
+
+@pytest.mark.unit
+def test_production_rejects_default_secrets() -> None:
+    """Verify that production rejects default dev secrets and unauthenticated mode."""
+    # Rejects default dev secret key
+    with pytest.raises(ValidationError, match="API_SECRET_KEY cannot use the default"):
+        Settings(
+            PROMETHEUS_ENV="production",
+            API_SECRET_KEY="dev-secret-key-replace-with-secure-value-in-production-min-32-chars",
+            ADMIN_SECRET_KEY="a-secure-production-admin-key-at-least-32-chars",
+            REQUIRE_AUTH=True,
+        )
+
+    # Rejects default dev admin key
+    with pytest.raises(ValidationError, match="ADMIN_SECRET_KEY cannot use the default"):
+        Settings(
+            PROMETHEUS_ENV="production",
+            API_SECRET_KEY="a-secure-production-api-key-at-least-32-chars",
+            ADMIN_SECRET_KEY="dev-admin-secret-key-replace-with-secure-value-min-32-chars",
+            REQUIRE_AUTH=True,
+        )
+
+    # Rejects REQUIRE_AUTH=False in production
+    with pytest.raises(ValidationError, match="REQUIRE_AUTH must be set to True"):
+        Settings(
+            PROMETHEUS_ENV="production",
+            API_SECRET_KEY="a-secure-production-api-key-at-least-32-chars",
+            ADMIN_SECRET_KEY="a-secure-production-admin-key-at-least-32-chars",
+            REQUIRE_AUTH=False,
+        )
+
+    # Valid production settings pass
+    prod_settings = Settings(
+        PROMETHEUS_ENV="production",
+        API_SECRET_KEY="a-secure-production-api-key-at-least-32-chars",
+        ADMIN_SECRET_KEY="a-secure-production-admin-key-at-least-32-chars",
+        REQUIRE_AUTH=True,
+    )
+    assert prod_settings.PROMETHEUS_ENV == "production"
+    assert prod_settings.REQUIRE_AUTH is True

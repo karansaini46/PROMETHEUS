@@ -152,6 +152,7 @@ class DockerSandboxRunner(BaseSandboxRunner):
                 read_only=active_limits.read_only_rootfs,
                 tmpfs=tmpfs_config,
                 name=execution_id,
+                labels={"prometheus.sandbox": "true"},
                 detach=True,
             )
             self._active_containers[execution_id] = container

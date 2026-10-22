@@ -101,6 +101,8 @@ def test_verify_action_approval_enforcement() -> None:
     """Verify explicit human approval requirement in production environments."""
     prod_settings = Settings(
         PROMETHEUS_ENV="production",
+        API_SECRET_KEY="prod-secret-key-super-secure-32-chars-long",
+        ADMIN_SECRET_KEY="prod-admin-secret-key-super-secure-32-chars",
         REQUIRE_AUTH=True,
         REQUIRE_APPROVAL_FOR_DESTRUCTIVE=True,
     )

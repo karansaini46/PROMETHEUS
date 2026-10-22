@@ -7,7 +7,7 @@ environment variables or .env files with strict typing and security guards.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -167,6 +167,10 @@ class Settings(BaseSettings):
         default=True,
         description="Require explicit human/admin approval for destructive or deployment operations",
     )
+    CORS_ORIGINS: list[str] = Field(
+        default_factory=lambda: ["*"],
+        description="Allowed CORS origins list",
+    )
 
     @field_validator("API_SECRET_KEY")
     @classmethod
@@ -185,6 +189,26 @@ class Settings(BaseSettings):
                 "SANDBOX_PIDS_LIMIT must be between 16 and 2048 to prevent fork-bombs."
             )
         return v
+
+    @model_validator(mode="after")
+    def validate_production_configuration(self) -> "Settings":
+        """Enforce strict security boundaries in production environments."""
+        if self.PROMETHEUS_ENV == "production":
+            if "dev-secret-key" in self.API_SECRET_KEY:
+                raise ValueError(
+                    "In production, API_SECRET_KEY cannot use the default development key. "
+                    "Provide a cryptographically secure key via environment variables."
+                )
+            if "dev-admin-secret-key" in self.ADMIN_SECRET_KEY:
+                raise ValueError(
+                    "In production, ADMIN_SECRET_KEY cannot use the default development key. "
+                    "Provide a dedicated administrative secret key."
+                )
+            if not self.REQUIRE_AUTH:
+                raise ValueError(
+                    "In production, REQUIRE_AUTH must be set to True to prevent unauthenticated access."
+                )
+        return self
 
 
 @lru_cache(maxsize=1)
