@@ -6,9 +6,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import docker
 from docker.errors import DockerException
 
-import docker
 from prometheus_ai.execution.guards import (
     PathTraversalError,
     SecurityException,

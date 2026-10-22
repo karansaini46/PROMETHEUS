@@ -16,10 +16,10 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import docker
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import docker
 from prometheus_ai.tools.execution import ExecutionRegistry
 from services.api.config import get_settings
 from services.api.models import (

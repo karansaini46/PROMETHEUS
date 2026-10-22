@@ -3,10 +3,10 @@
 from datetime import UTC, datetime
 from typing import Any
 
+import docker
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel
 
-import docker
 from services.api.config import get_settings
 from services.api.db import check_db_health
 from services.api.worker import WorkerManager
