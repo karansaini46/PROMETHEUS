@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createModel, getModels } from "../../lib/api";
 import { EmptyState, ErrorState, LoadingState } from "../components/UIStates";
 import type { ModelConfiguration } from "@prometheus/shared-types";
+import { IconCopy, IconModels, IconSearch } from "../components/Icons";
 
 export default function ModelLaboratoryPage() {
   const [models, setModels] = useState<ModelConfiguration[]>([]);
@@ -12,7 +13,8 @@ export default function ModelLaboratoryPage() {
 
   // Filter state
   const [providerFilter, setProviderFilter] = useState<string>("");
-  const [activeOnly, setActiveOnly] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // New Model Registration Form
   const [showAddModal, setShowAddModal] = useState(false);
@@ -34,21 +36,24 @@ export default function ModelLaboratoryPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getModels({
-        provider: providerFilter || undefined,
-        is_active: activeOnly ? true : undefined,
-      });
+      const data = await getModels();
       setModels(data);
     } catch (err: any) {
       setError(err?.message || "Failed to load model configurations.");
     } finally {
       setLoading(false);
     }
-  }, [providerFilter, activeOnly]);
+  }, []);
 
   useEffect(() => {
     loadModels();
   }, [loadModels]);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(text);
+    setTimeout(() => setCopiedId(null), 1800);
+  };
 
   const handleCreateModel = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,19 +92,36 @@ export default function ModelLaboratoryPage() {
     }
   };
 
+  const filteredModels = useMemo(() => {
+    return models.filter((m) => {
+      const matchesProvider = !providerFilter || m.provider.toLowerCase() === providerFilter.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
+      const matchesQuery = !q || m.name.toLowerCase().includes(q) || m.model_name.toLowerCase().includes(q);
+      return matchesProvider && matchesQuery;
+    });
+  }, [models, providerFilter, searchQuery]);
+
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Model Laboratory</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.25rem" }}>
+            <h1 className="page-title">Model Laboratory</h1>
+            <span className="badge badge-resolved">
+              MULTI-VENDOR ROUTER
+            </span>
+          </div>
           <p className="page-description">
             Configured LLM providers, token economics, context window boundaries, and checkpoint parameters.
           </p>
         </div>
-        <div>
+        <div style={{ display: "flex", gap: "0.75rem" }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={loadModels}>
+            Refresh
+          </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm"
             onClick={() => setShowAddModal(!showAddModal)}
             aria-expanded={showAddModal}
           >
@@ -111,10 +133,10 @@ export default function ModelLaboratoryPage() {
       {formSuccess && (
         <div
           className="state-box"
-          style={{ padding: "0.85rem 1.25rem", marginBottom: "1.5rem", borderColor: "var(--success)" }}
+          style={{ padding: "0.85rem 1.25rem", marginBottom: "1.5rem", borderColor: "var(--success-border)" }}
           role="status"
         >
-          <p style={{ color: "var(--success)", fontWeight: 600 }}>✓ {formSuccess}</p>
+          <p style={{ color: "var(--success-text)", fontWeight: 500 }}>{formSuccess}</p>
         </div>
       )}
 
@@ -125,22 +147,26 @@ export default function ModelLaboratoryPage() {
           onSubmit={handleCreateModel}
           aria-label="Register Model Configuration Form"
         >
-          <h2 style={{ fontSize: "1.1rem", marginBottom: "1rem", color: "var(--text-primary)" }}>
-            Register LLM Provider Configuration
-          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.25rem" }}>
+            <IconModels size={16} />
+            <h2 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)" }}>
+              Register LLM Provider Configuration
+            </h2>
+          </div>
 
           {formError && (
             <div
               style={{
-                color: "var(--danger)",
-                backgroundColor: "var(--danger-subtle)",
+                color: "var(--danger-text)",
+                backgroundColor: "var(--danger-bg)",
+                border: "1px solid var(--danger-border)",
                 padding: "0.6rem 0.85rem",
-                borderRadius: "4px",
+                borderRadius: "5px",
                 marginBottom: "1rem",
-                fontSize: "0.825rem",
+                fontSize: "0.78125rem",
               }}
             >
-              ⚠ {formError}
+              {formError}
             </div>
           )}
 
@@ -172,8 +198,8 @@ export default function ModelLaboratoryPage() {
               >
                 <option value="anthropic">anthropic</option>
                 <option value="openai">openai</option>
+                <option value="gemini">google gemini</option>
                 <option value="deepseek">deepseek</option>
-                <option value="google">google</option>
                 <option value="ollama">ollama (local)</option>
                 <option value="vllm">vllm (self-hosted)</option>
               </select>
@@ -187,7 +213,7 @@ export default function ModelLaboratoryPage() {
                 id="model-id"
                 type="text"
                 className="form-input"
-                placeholder="e.g. claude-3-5-sonnet-20241022 or gpt-4o"
+                placeholder="e.g. claude-3-5-sonnet-20241022 or gemini-2.5-flash"
                 value={formModelName}
                 onChange={(e) => setFormModelName(e.target.value)}
                 required
@@ -200,17 +226,30 @@ export default function ModelLaboratoryPage() {
               </label>
               <input
                 id="model-api-base"
-                type="url"
+                type="text"
                 className="form-input"
-                placeholder="https://api.openai.com/v1 or http://localhost:11434"
+                placeholder="e.g. http://localhost:11434/v1"
                 value={formBaseUrl}
                 onChange={(e) => setFormBaseUrl(e.target.value)}
               />
             </div>
 
             <div className="form-group">
+              <label htmlFor="model-context" className="form-label">
+                Context Window (tokens)
+              </label>
+              <input
+                id="model-context"
+                type="number"
+                className="form-input"
+                value={formContextWindow}
+                onChange={(e) => setFormContextWindow(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="form-group">
               <label htmlFor="model-temp" className="form-label">
-                Temperature (0.0 - 1.0)
+                Default Temperature (0.0 - 1.0)
               </label>
               <input
                 id="model-temp"
@@ -220,197 +259,152 @@ export default function ModelLaboratoryPage() {
                 max="1"
                 className="form-input"
                 value={formTemp}
-                onChange={(e) => setFormTemp(parseFloat(e.target.value))}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="model-context" className="form-label">
-                Context Window (Tokens)
-              </label>
-              <input
-                id="model-context"
-                type="number"
-                className="form-input"
-                value={formContextWindow}
-                onChange={(e) => setFormContextWindow(parseInt(e.target.value, 10))}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="model-max-tokens" className="form-label">
-                Max Output Tokens
-              </label>
-              <input
-                id="model-max-tokens"
-                type="number"
-                className="form-input"
-                value={formMaxTokens}
-                onChange={(e) => setFormMaxTokens(parseInt(e.target.value, 10))}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="model-input-cost" className="form-label">
-                Cost / Million Input Tokens ($)
-              </label>
-              <input
-                id="model-input-cost"
-                type="number"
-                step="0.1"
-                className="form-input"
-                value={formInputCost}
-                onChange={(e) => setFormInputCost(parseFloat(e.target.value))}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="model-output-cost" className="form-label">
-                Cost / Million Output Tokens ($)
-              </label>
-              <input
-                id="model-output-cost"
-                type="number"
-                step="0.1"
-                className="form-input"
-                value={formOutputCost}
-                onChange={(e) => setFormOutputCost(parseFloat(e.target.value))}
+                onChange={(e) => setFormTemp(Number(e.target.value))}
               />
             </div>
           </div>
 
-          <div style={{ marginTop: "1.25rem", display: "flex", gap: "0.75rem" }}>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? "Registering..." : "Save Configuration"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setShowAddModal(false)}
-            >
+          <div style={{ marginTop: "1.25rem", display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowAddModal(false)}>
               Cancel
+            </button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={submitting}>
+              {submitting ? "Saving..." : "Save Model Configuration"}
             </button>
           </div>
         </form>
       )}
 
-      {/* Filter Row */}
+      {/* Filter and Search Bar */}
       <div
         style={{
           display: "flex",
-          gap: "1rem",
+          justifyContent: "space-between",
           alignItems: "center",
+          gap: "1rem",
           marginBottom: "1.5rem",
           flexWrap: "wrap",
         }}
       >
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <label htmlFor="filter-prov" className="form-label" style={{ margin: 0 }}>
-            Provider:
-          </label>
-          <select
-            id="filter-prov"
-            className="form-select"
-            style={{ width: "auto" }}
-            value={providerFilter}
-            onChange={(e) => setProviderFilter(e.target.value)}
+        <div className="chip-group">
+          <button
+            type="button"
+            className={`chip ${providerFilter === "" ? "active" : ""}`}
+            onClick={() => setProviderFilter("")}
           >
-            <option value="">All Providers</option>
-            <option value="anthropic">anthropic</option>
-            <option value="openai">openai</option>
-            <option value="deepseek">deepseek</option>
-            <option value="google">google</option>
-            <option value="ollama">ollama</option>
-          </select>
+            All Providers <span className="chip-count">{models.length}</span>
+          </button>
+          {["anthropic", "openai", "gemini", "ollama"].map((prov) => {
+            const count = models.filter((m) => m.provider.toLowerCase() === prov).length;
+            if (count === 0 && providerFilter !== prov) return null;
+            return (
+              <button
+                key={prov}
+                type="button"
+                className={`chip ${providerFilter === prov ? "active" : ""}`}
+                onClick={() => setProviderFilter(providerFilter === prov ? "" : prov)}
+              >
+                {prov} <span className="chip-count">{count}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={activeOnly}
-            onChange={(e) => setActiveOnly(e.target.checked)}
-          />
-          Active Only
-        </label>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <div style={{ position: "relative" }}>
+            <input
+              type="text"
+              className="form-input"
+              style={{ width: "240px", paddingLeft: "2rem" }}
+              placeholder="Search model configs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <span
+              style={{
+                position: "absolute",
+                left: "0.65rem",
+                top: "50%",
+                transform: "translateY(-50%)",
+                opacity: 0.5,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <IconSearch size={14} />
+            </span>
+          </div>
+          {searchQuery && (
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={() => setSearchQuery("")}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Model Cards / Table */}
       {loading ? (
         <LoadingState message="Fetching registered model configurations..." />
       ) : error ? (
         <ErrorState title="Failed to load models" message={error} onRetry={loadModels} />
-      ) : models.length === 0 ? (
+      ) : filteredModels.length === 0 ? (
         <EmptyState
-          title="No model configurations registered"
-          description="Register a model provider endpoint and token pricing to dispatch agent runs."
-          actionLabel="+ Register Model Configuration"
+          title="No model configurations match"
+          description="Register an API provider or local inference endpoint above."
+          actionLabel="+ Register First Model"
           onAction={() => setShowAddModal(true)}
         />
       ) : (
         <div className="table-container">
-          <div className="table-header-bar">
-            <h2 className="table-title">Model Configurations ({models.length})</h2>
-          </div>
-
-          <table className="eng-table" aria-label="Model Configurations Table">
+          <table className="eng-table">
             <thead>
               <tr>
-                <th scope="col">Name & ID</th>
-                <th scope="col">Provider / Model ID</th>
-                <th scope="col">Context Window</th>
-                <th scope="col">Max Output</th>
-                <th scope="col">Temp</th>
-                <th scope="col">Input ($/1M)</th>
-                <th scope="col">Output ($/1M)</th>
-                <th scope="col">Status</th>
+                <th>Configuration Name</th>
+                <th>Provider Family</th>
+                <th>Model Identifier</th>
+                <th>Context Window</th>
+                <th>Rate / Cost ($/M)</th>
+                <th>Temperature</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {models.map((m) => (
+              {filteredModels.map((m) => (
                 <tr key={m.id}>
                   <td>
                     <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{m.name}</div>
-                    <div className="table-mono" style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
-                      {m.id}
+                  </td>
+                  <td>
+                    <span className="badge badge-pending">{m.provider}</span>
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <span className="table-mono" style={{ color: "var(--accent)" }}>{m.model_name}</span>
+                      <button
+                        type="button"
+                        className="copy-pill"
+                        onClick={() => copyToClipboard(m.model_name)}
+                        title="Copy model identifier"
+                      >
+                        {copiedId === m.model_name ? "✓" : <IconCopy size={12} />}
+                      </button>
                     </div>
                   </td>
-                  <td>
-                    <div className="table-mono" style={{ color: "var(--accent)", fontWeight: 600 }}>
-                      {m.provider}
-                    </div>
-                    <div className="table-mono" style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                      {m.model_name}
-                    </div>
+                  <td className="table-mono">
+                    {m.context_window.toLocaleString()} <span style={{ opacity: 0.6, fontSize: "0.75rem" }}>tok</span>
                   </td>
+                  <td className="table-mono" style={{ color: "var(--success)" }}>
+                    ${m.cost_per_million_input_tokens || 0} / ${m.cost_per_million_output_tokens || 0}
+                  </td>
+                  <td className="table-mono">{m.temperature}</td>
                   <td>
-                    <span className="table-mono">
-                      {(m.context_window || 0).toLocaleString()} tok
+                    <span className="badge badge-resolved">
+                      <span className="badge-dot" aria-hidden="true" />
+                      ACTIVE
                     </span>
-                  </td>
-                  <td>
-                    <span className="table-mono">
-                      {(m.max_tokens || 0).toLocaleString()}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="table-mono">{m.temperature}</span>
-                  </td>
-                  <td>
-                    <span className="table-mono" style={{ color: "var(--text-primary)" }}>
-                      ${m.cost_per_million_input_tokens?.toFixed(2)}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="table-mono" style={{ color: "var(--text-primary)" }}>
-                      ${m.cost_per_million_output_tokens?.toFixed(2)}
-                    </span>
-                  </td>
-                  <td>
-                    {m.is_active ? (
-                      <span className="badge badge-resolved">ACTIVE</span>
-                    ) : (
-                      <span className="badge badge-pending">INACTIVE</span>
-                    )}
                   </td>
                 </tr>
               ))}

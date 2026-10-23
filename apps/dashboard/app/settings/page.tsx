@@ -9,6 +9,7 @@ import {
   setDemoMode,
 } from "../../lib/api";
 import type { HealthResponse, ReadinessResponse } from "@prometheus/shared-types";
+import { IconCheck, IconSettings } from "../components/Icons";
 
 export default function SettingsPage() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -18,6 +19,7 @@ export default function SettingsPage() {
   // Settings form states
   const [apiUrl, setApiUrl] = useState(API_URL);
   const [apiKey, setApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
   const [timeoutSec, setTimeoutSec] = useState(300);
   const [maxIterations, setMaxIterations] = useState(15);
   const [demoActive, setDemoActive] = useState(false);
@@ -28,7 +30,7 @@ export default function SettingsPage() {
     anthropic: true,
     openai: true,
     deepseek: true,
-    google: false,
+    google: true,
     ollama: true,
     vllm: false,
   });
@@ -94,7 +96,12 @@ export default function SettingsPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">System Settings & Providers</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.25rem" }}>
+            <h1 className="page-title">System Settings & Providers</h1>
+            <span className="badge badge-pending">
+              PLATFORM CONFIGURATION
+            </span>
+          </div>
           <p className="page-description">
             Configure permitted model providers, execution timeouts, authorization credentials, and simulation modes.
           </p>
@@ -113,10 +120,13 @@ export default function SettingsPage() {
 
       {/* Diagnostics Panel */}
       <div className="metric-card" style={{ marginBottom: "2rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)" }}>
-            Authoritative Control Plane Status
-          </h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <IconSettings size={18} color="var(--accent)" />
+            <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)" }}>
+              Authoritative Control Plane Status
+            </h2>
+          </div>
           <button
             type="button"
             className="btn btn-sm btn-secondary"
@@ -129,7 +139,7 @@ export default function SettingsPage() {
 
         <div className="form-grid">
           <div>
-            <div className="metric-label">FastAPI Endpoint</div>
+            <div className="metric-label">FastAPI Gateway</div>
             <div className="table-mono" style={{ fontSize: "0.85rem", color: "var(--accent)" }}>
               {apiUrl}
             </div>
@@ -144,6 +154,7 @@ export default function SettingsPage() {
                   health?.database === "connected" ? "badge-resolved" : "badge-running"
                 }`}
               >
+                <span className="badge-dot" aria-hidden="true" />
                 {health?.database?.toUpperCase() || "DISCONNECTED"}
               </span>
             </div>
@@ -158,6 +169,7 @@ export default function SettingsPage() {
                   health?.sandbox_available ? "badge-resolved" : "badge-pending"
                 }`}
               >
+                <span className="badge-dot" aria-hidden="true" />
                 {health?.sandbox_available ? "READY (CONTAINERIZED)" : "STANDBY (MOCK)"}
               </span>
             </div>
@@ -190,20 +202,22 @@ export default function SettingsPage() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.6rem 0.85rem",
-                  backgroundColor: "var(--bg-elevated)",
-                  borderRadius: "6px",
+                  gap: "0.6rem",
+                  padding: "0.65rem 0.95rem",
+                  backgroundColor: enabled ? "var(--bg-elevated)" : "var(--bg-card)",
+                  borderRadius: "8px",
                   cursor: "pointer",
-                  border: "1px solid var(--border-subtle)",
+                  border: `1px solid ${enabled ? "var(--accent)" : "var(--border-subtle)"}`,
+                  transition: "all 0.15s ease",
                 }}
               >
                 <input
                   type="checkbox"
                   checked={enabled}
                   onChange={() => handleToggleProvider(providerName as keyof typeof providers)}
+                  style={{ accentColor: "var(--accent)" }}
                 />
-                <span className="table-mono" style={{ textTransform: "uppercase", fontSize: "0.8rem" }}>
+                <span style={{ fontSize: "0.85rem", textTransform: "capitalize", fontWeight: enabled ? 600 : 400 }}>
                   {providerName}
                 </span>
               </label>
@@ -211,22 +225,8 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Execution & Security Grid */}
-        <div className="form-grid">
-          <div className="form-group">
-            <label htmlFor="settings-api-key" className="form-label">
-              Admin API Key (X-API-Key)
-            </label>
-            <input
-              id="settings-api-key"
-              type="password"
-              className="form-input"
-              placeholder="Enter secret token for privileged operations..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-          </div>
-
+        {/* Execution Constraints */}
+        <div className="form-grid" style={{ marginBottom: "2rem" }}>
           <div className="form-group">
             <label htmlFor="settings-timeout" className="form-label">
               Sandbox Execution Timeout (seconds)
@@ -235,55 +235,89 @@ export default function SettingsPage() {
               id="settings-timeout"
               type="number"
               className="form-input"
-              min="30"
-              max="3600"
               value={timeoutSec}
-              onChange={(e) => setTimeoutSec(parseInt(e.target.value, 10))}
+              onChange={(e) => setTimeoutSec(Number(e.target.value))}
             />
           </div>
 
           <div className="form-group">
             <label htmlFor="settings-max-iter" className="form-label">
-              Max Agent Iterations per Run
+              Maximum Agent Reasoning Iterations
             </label>
             <input
               id="settings-max-iter"
               type="number"
               className="form-input"
-              min="1"
-              max="50"
               value={maxIterations}
-              onChange={(e) => setMaxIterations(parseInt(e.target.value, 10))}
+              onChange={(e) => setMaxIterations(Number(e.target.value))}
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="settings-api-key" className="form-label">
+              Admin & Service API Key
+            </label>
+            <div style={{ display: "flex", gap: "0.4rem" }}>
+              <input
+                id="settings-api-key"
+                type={showApiKey ? "text" : "password"}
+                className="form-input"
+                style={{ flex: 1 }}
+                placeholder="Optional Bearer token"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => setShowApiKey(!showApiKey)}
+              >
+                {showApiKey ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Mode Toggles */}
-        <div style={{ marginTop: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer", fontSize: "0.85rem" }}>
-            <input
-              type="checkbox"
-              checked={autoRunTests}
-              onChange={(e) => setAutoRunTests(e.target.checked)}
-            />
-            <span>Auto-run test verification in isolated container after synthesizing patch</span>
-          </label>
-
-          <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer", fontSize: "0.85rem" }}>
+        {/* Toggles */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2rem" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
             <input
               type="checkbox"
               checked={demoActive}
               onChange={(e) => setDemoActive(e.target.checked)}
+              style={{ accentColor: "var(--accent)", width: "16px", height: "16px" }}
             />
-            <span>
-              <strong>Labeled Demo Mode</strong> (Use sample datasets when backend is disconnected)
-            </span>
+            <div>
+              <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                Enable Sample Demo Mode
+              </span>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                Overrides live backend queries with realistic SWE-bench verification fixtures for offline presentations.
+              </p>
+            </div>
+          </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={autoRunTests}
+              onChange={(e) => setAutoRunTests(e.target.checked)}
+              style={{ accentColor: "var(--accent)", width: "16px", height: "16px" }}
+            />
+            <div>
+              <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                Auto-execute Dual Test Oracles (FAIL_TO_PASS + PASS_TO_PASS)
+              </span>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                Immediately apply synthesized patches inside isolated containers and execute regression suites.
+              </p>
+            </div>
           </label>
         </div>
 
-        <div style={{ marginTop: "2rem" }}>
-          <button type="submit" className="btn btn-primary">
-            Save Preferences
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button type="submit" className="btn btn-primary btn-sm">
+            Save System Preferences
           </button>
         </div>
       </form>

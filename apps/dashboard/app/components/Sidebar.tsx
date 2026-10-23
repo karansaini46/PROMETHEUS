@@ -3,23 +3,34 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  IconEvaluations,
+  IconMemory,
+  IconModels,
+  IconOverview,
+  IconPatchReview,
+  IconProjects,
+  IconRuns,
+  IconSettings,
+  IconTasks,
+} from "./Icons";
 
 interface NavItem {
   href: string;
   label: string;
-  icon: string;
+  IconComponent: React.ComponentType<{ size?: number; className?: string }>;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Overview", icon: "⎈" },
-  { href: "/projects", label: "Projects", icon: "◈" },
-  { href: "/tasks", label: "Task Workspace", icon: "⚡" },
-  { href: "/runs", label: "Execution Inspector", icon: "▶" },
-  { href: "/patch-review", label: "Patch Review", icon: "⌥" },
-  { href: "/models", label: "Model Laboratory", icon: "⌬" },
-  { href: "/evaluations", label: "Evaluation Lab", icon: "⌖" },
-  { href: "/memory", label: "Memory Explorer", icon: "☵" },
-  { href: "/settings", label: "Settings", icon: "⚙" },
+  { href: "/", label: "Overview", IconComponent: IconOverview },
+  { href: "/projects", label: "Projects", IconComponent: IconProjects },
+  { href: "/tasks", label: "Task Workspace", IconComponent: IconTasks },
+  { href: "/runs", label: "Execution Runs", IconComponent: IconRuns },
+  { href: "/patch-review", label: "Patch Review", IconComponent: IconPatchReview },
+  { href: "/models", label: "Model Registry", IconComponent: IconModels },
+  { href: "/evaluations", label: "Evaluations", IconComponent: IconEvaluations },
+  { href: "/memory", label: "Memory Graph", IconComponent: IconMemory },
+  { href: "/settings", label: "Settings", IconComponent: IconSettings },
 ];
 
 export function Sidebar() {
@@ -28,11 +39,13 @@ export function Sidebar() {
   return (
     <aside className="sidebar" aria-label="Main Navigation">
       <div className="sidebar-brand">
-        <div className="brand-glyph" aria-hidden="true">P</div>
-        <div>
-          <div className="brand-title">PROMETHEUS</div>
-          <div className="brand-env">Control Center</div>
-        </div>
+        <Link href="/" className="brand-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EDEDED" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
+          <span>PROMETHEUS</span>
+        </Link>
+        <span className="brand-badge">v0.1.0</span>
       </div>
 
       <nav className="sidebar-nav">
@@ -42,6 +55,8 @@ export function Sidebar() {
               ? pathname === "/"
               : pathname.startsWith(item.href);
 
+          const { IconComponent } = item;
+
           return (
             <Link
               key={item.href}
@@ -50,7 +65,7 @@ export function Sidebar() {
               aria-current={isActive ? "page" : undefined}
             >
               <span className="nav-icon" aria-hidden="true">
-                {item.icon}
+                <IconComponent size={15} />
               </span>
               <span>{item.label}</span>
             </Link>
@@ -59,8 +74,11 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <div>Engine: Python 3.12 / LangGraph</div>
-        <div>Persistence: PostgreSQL 16</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <span className="pulse-dot" />
+          <span>Core Daemon</span>
+        </div>
+        <span>online</span>
       </div>
     </aside>
   );
