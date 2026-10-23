@@ -19,6 +19,7 @@ import type {
   TaskStatus,
   TaskType,
 } from "@prometheus/shared-types";
+import { IconCopy, IconSearch, IconTasks } from "../components/Icons";
 
 export default function TaskWorkspacePage() {
   const router = useRouter();
@@ -36,6 +37,7 @@ export default function TaskWorkspacePage() {
   const [totalItems, setTotalItems] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Submit Issue Form State
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -95,6 +97,12 @@ export default function TaskWorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, loadData]);
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(text);
+    setTimeout(() => setCopiedId(null), 1800);
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
@@ -111,30 +119,29 @@ export default function TaskWorkspacePage() {
     setFormError(null);
 
     if (!formTitle.trim() || !formProblem.trim()) {
-      setFormError("Task title and problem statement are required.");
+      setFormError("Title and Problem Statement are required.");
       return;
     }
 
     setSubmitting(true);
     try {
-      const created = await createTask({
-        project_id: formProjectId || projects[0]?.id || "proj-ast-engine",
+      const newTask = await createTask({
+        project_id: formProjectId || (projects[0]?.id ?? "proj-default"),
         title: formTitle.trim(),
         problem_statement: formProblem.trim(),
         task_type: formTaskType,
         priority: formPriority,
-        base_commit: formBaseCommit.trim() || undefined,
-        reproduce_command: formReproduceCmd.trim() || undefined,
+        base_commit: formBaseCommit.trim() || null,
+        reproduce_command: formReproduceCmd.trim() || null,
       });
 
-      setFormSuccess(`Task ${created.id} submitted to engineering queue.`);
+      setFormSuccess(`Task '${newTask.title}' submitted to engineering queue.`);
       setShowSubmitModal(false);
       setFormTitle("");
       setFormProblem("");
       setFormBaseCommit("");
       setFormReproduceCmd("");
-      // reload
-      await loadData(1, statusFilter, searchQuery);
+      loadData(1, statusFilter, searchQuery);
     } catch (err: any) {
       setFormError(err?.message || "Failed to submit task.");
     } finally {
@@ -142,8 +149,10 @@ export default function TaskWorkspacePage() {
     }
   };
 
-  const handleTriggerRun = async () => {
+  const handleDispatchRun = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!dispatchTask) return;
+
     setDispatching(true);
     try {
       const run = await createRun({
@@ -164,9 +173,9 @@ export default function TaskWorkspacePage() {
       case "OPEN":
         return <span className="badge badge-open">OPEN</span>;
       case "IN_PROGRESS":
-        return <span className="badge badge-running">IN PROGRESS</span>;
+        return <span className="badge badge-running"><span className="badge-dot" />IN PROGRESS</span>;
       case "RESOLVED":
-        return <span className="badge badge-resolved">RESOLVED</span>;
+        return <span className="badge badge-resolved">✓ RESOLVED</span>;
       case "CLOSED":
         return <span className="badge badge-pending">CLOSED</span>;
       case "CANCELLED":
@@ -188,7 +197,7 @@ export default function TaskWorkspacePage() {
         style={{
           fontFamily: "var(--font-mono)",
           fontSize: "0.75rem",
-          fontWeight: 600,
+          fontWeight: 700,
           color: colorMap[priority] || "var(--text-secondary)",
         }}
       >
@@ -201,7 +210,12 @@ export default function TaskWorkspacePage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Task Workspace</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.25rem" }}>
+            <h1 className="page-title">Task Workspace</h1>
+            <span className="badge badge-pending">
+              Registered Tasks ({totalItems})
+            </span>
+          </div>
           <p className="page-description">
             Submit software engineering issues, track autonomous reproduction lifecycles, and dispatch execution runs.
           </p>
@@ -209,7 +223,7 @@ export default function TaskWorkspacePage() {
         <div style={{ display: "flex", gap: "0.75rem" }}>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm"
             onClick={() => setShowSubmitModal(!showSubmitModal)}
             aria-expanded={showSubmitModal}
           >
@@ -235,9 +249,12 @@ export default function TaskWorkspacePage() {
           onSubmit={handleSubmitTask}
           aria-label="Submit Engineering Task Form"
         >
-          <h2 style={{ fontSize: "1.1rem", marginBottom: "1rem", color: "var(--text-primary)" }}>
-            New Engineering Issue / Target
-          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.25rem" }}>
+            <IconTasks size={20} color="var(--accent)" />
+            <h2 style={{ fontSize: "1.05rem", fontWeight: 600, color: "var(--text-primary)" }}>
+              New Engineering Issue / Target
+            </h2>
+          </div>
 
           {formError && (
             <div
@@ -245,7 +262,7 @@ export default function TaskWorkspacePage() {
                 color: "var(--danger)",
                 backgroundColor: "var(--danger-subtle)",
                 padding: "0.6rem 0.85rem",
-                borderRadius: "4px",
+                borderRadius: "6px",
                 marginBottom: "1rem",
                 fontSize: "0.825rem",
               }}
@@ -315,7 +332,6 @@ export default function TaskWorkspacePage() {
                 id="task-commit"
                 type="text"
                 className="form-input"
-                placeholder="e.g. 7f3b890d (defaults to HEAD)"
                 value={formBaseCommit}
                 onChange={(e) => setFormBaseCommit(e.target.value)}
               />
@@ -330,7 +346,6 @@ export default function TaskWorkspacePage() {
               id="task-title"
               type="text"
               className="form-input"
-              placeholder="e.g. RecursionError in ast_indexer on cyclic module imports"
               value={formTitle}
               onChange={(e) => setFormTitle(e.target.value)}
               required
@@ -338,14 +353,13 @@ export default function TaskWorkspacePage() {
           </div>
 
           <div className="form-group" style={{ marginTop: "1rem" }}>
-            <label htmlFor="task-desc" className="form-label">
+            <label htmlFor="task-problem" className="form-label">
               Problem Statement & Reproduction Evidence *
             </label>
             <textarea
-              id="task-desc"
+              id="task-problem"
               className="form-textarea"
-              rows={5}
-              placeholder="Provide exact traceback, stack trace, expected behavior, or failing assertion..."
+              rows={4}
               value={formProblem}
               onChange={(e) => setFormProblem(e.target.value)}
               required
@@ -353,29 +367,32 @@ export default function TaskWorkspacePage() {
           </div>
 
           <div className="form-group" style={{ marginTop: "1rem" }}>
-            <label htmlFor="task-cmd" className="form-label">
-              Reproduction Test Command
+            <label htmlFor="task-reproduce-cmd" className="form-label">
+              Reproduction Test Command (Optional)
             </label>
             <input
-              id="task-cmd"
+              id="task-reproduce-cmd"
               type="text"
               className="form-input"
-              placeholder="e.g. pytest tests/test_ast.py -k test_circular_ref"
               value={formReproduceCmd}
               onChange={(e) => setFormReproduceCmd(e.target.value)}
             />
           </div>
 
-          <div style={{ marginTop: "1.25rem", display: "flex", gap: "0.75rem" }}>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? "Submitting Task..." : "Enqueue Task"}
-            </button>
+          <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-sm"
               onClick={() => setShowSubmitModal(false)}
             >
               Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={submitting}
+            >
+              {submitting ? "Submitting..." : "Enqueue Task"}
             </button>
           </div>
         </form>
@@ -392,76 +409,79 @@ export default function TaskWorkspacePage() {
           flexWrap: "wrap",
         }}
       >
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <label htmlFor="filter-status" className="form-label" style={{ margin: 0 }}>
-            Status:
-          </label>
-          <select
-            id="filter-status"
-            className="form-select"
-            style={{ width: "auto" }}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+        <div className="chip-group">
+          <button
+            type="button"
+            className={`chip ${statusFilter === "" ? "active" : ""}`}
+            onClick={() => setStatusFilter("")}
           >
-            <option value="">All Statuses</option>
-            <option value="OPEN">OPEN</option>
-            <option value="IN_PROGRESS">IN PROGRESS</option>
-            <option value="RESOLVED">RESOLVED</option>
-            <option value="CLOSED">CLOSED</option>
-            <option value="CANCELLED">CANCELLED</option>
-          </select>
+            All Statuses
+          </button>
+          {["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"].map((st) => (
+            <button
+              key={st}
+              type="button"
+              className={`chip ${statusFilter === st ? "active" : ""}`}
+              onClick={() => setStatusFilter(statusFilter === st ? "" : st)}
+            >
+              {st}
+            </button>
+          ))}
         </div>
 
         <form onSubmit={handleSearchSubmit} style={{ display: "flex", gap: "0.5rem" }}>
-          <input
-            type="search"
-            className="form-input"
-            style={{ width: "260px" }}
-            placeholder="Search issues, titles, commit..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search tasks"
-          />
-          <button type="submit" className="btn btn-secondary">
+          <div style={{ position: "relative" }}>
+            <input
+              type="text"
+              className="form-input"
+              style={{ width: "240px", paddingLeft: "2rem" }}
+              aria-label="Search tasks"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <span
+              style={{
+                position: "absolute",
+                left: "0.65rem",
+                top: "50%",
+                transform: "translateY(-50%)",
+                opacity: 0.5,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <IconSearch size={14} />
+            </span>
+          </div>
+          <button type="submit" className="btn btn-secondary btn-sm">
             Search
           </button>
         </form>
       </div>
 
-      {/* Content Rendering */}
       {loading ? (
-        <LoadingState message="Fetching engineering tasks..." />
+        <LoadingState message="Querying task workspace records..." />
       ) : error ? (
-        <ErrorState title="Failed to retrieve tasks" message={error} onRetry={() => loadData()} />
+        <ErrorState title="Failed to load tasks" message={error} onRetry={() => loadData(page)} />
       ) : tasks.length === 0 ? (
         <EmptyState
-          title="No tasks found"
-          description={
-            statusFilter || searchQuery
-              ? "No tasks match the active filters or search query."
-              : "No engineering issues submitted yet. Enqueue a task to begin."
-          }
+          title="No engineering tasks found"
+          description="Submit a software defect or feature specification above to initialize autonomous localization."
           actionLabel="+ Submit Debugging Task"
           onAction={() => setShowSubmitModal(true)}
         />
       ) : (
         <div className="table-container">
-          <div className="table-header-bar">
-            <h2 className="table-title">Registered Tasks ({totalItems})</h2>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              Page {page} of {totalPages}
-            </span>
-          </div>
-
-          <table className="eng-table" aria-label="Tasks List">
+          <table className="eng-table" aria-label="Tasks Table">
             <thead>
               <tr>
-                <th scope="col">Task ID</th>
-                <th scope="col">Title & Issue Statement</th>
+                <th scope="col">Task Identifier</th>
+                <th scope="col">Issue Title</th>
                 <th scope="col">Type</th>
                 <th scope="col">Priority</th>
                 <th scope="col">Status</th>
                 <th scope="col">Runs</th>
+                <th scope="col">Created</th>
                 <th scope="col">Actions</th>
               </tr>
             </thead>
@@ -469,86 +489,55 @@ export default function TaskWorkspacePage() {
               {tasks.map((task) => (
                 <tr key={task.id}>
                   <td>
-                    <span className="table-mono" style={{ color: "var(--accent)" }}>
-                      {task.id}
-                    </span>
-                    {task.base_commit && (
-                      <div
-                        className="table-mono"
-                        style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <span className="table-mono" style={{ color: "var(--accent)", fontWeight: 600 }}>
+                        {task.id}
+                      </span>
+                      <button
+                        type="button"
+                        className="copy-pill"
+                        onClick={() => copyToClipboard(task.id)}
+                        title="Copy task ID"
                       >
-                        commit: {task.base_commit.slice(0, 8)}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ maxWidth: "420px" }}>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        color: "var(--text-primary)",
-                        marginBottom: "0.25rem",
-                      }}
-                    >
-                      {task.title}
+                        {copiedId === task.id ? "✓" : <IconCopy size={12} />}
+                      </button>
                     </div>
-                    <div
-                      style={{
-                        fontSize: "0.775rem",
-                        color: "var(--text-secondary)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                      }}
-                    >
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{task.title}</div>
+                    <div style={{ fontSize: "0.775rem", color: "var(--text-muted)", marginTop: "0.2rem", maxWidth: "340px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {task.problem_statement}
                     </div>
                   </td>
                   <td>
-                    <span className="table-mono" style={{ fontSize: "0.75rem" }}>
+                    <span className="badge badge-pending" style={{ fontSize: "0.7rem" }}>
                       {task.task_type}
                     </span>
                   </td>
                   <td>{getPriorityBadge(task.priority)}</td>
                   <td>{getStatusBadge(task.status)}</td>
-                  <td>
-                    <span className="table-mono">
-                      {task.runs_count || 0} run{(task.runs_count || 0) === 1 ? "" : "s"}
-                    </span>
-                    {task.latest_run_status && (
-                      <div style={{ marginTop: "0.2rem" }}>
-                        <span
-                          className={`badge ${
-                            task.latest_run_status === "RESOLVED"
-                              ? "badge-resolved"
-                              : task.latest_run_status === "RUNNING"
-                              ? "badge-running"
-                              : "badge-pending"
-                          }`}
-                          style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem" }}
-                        >
-                          {task.latest_run_status}
-                        </span>
-                      </div>
-                    )}
+                  <td className="table-mono">
+                    {task.runs_count || 0}
+                  </td>
+                  <td style={{ fontSize: "0.775rem", color: "var(--text-muted)" }}>
+                    {new Date(task.created_at).toLocaleDateString()}
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: "0.4rem" }}>
                       <button
                         type="button"
-                        className="btn btn-sm btn-primary"
+                        className="btn btn-sm btn-secondary"
                         onClick={() => setDispatchTask(task)}
-                        title="Dispatch an autonomous execution run for this issue"
+                        title="Dispatch autonomous debugging run"
                       >
                         ▶ Run
                       </button>
                       <Link
                         href={`/runs?task_id=${task.id}`}
                         className="btn btn-sm btn-secondary"
-                        title="View runs for this task"
+                        title="View run history for this task"
                       >
-                        Runs
+                        Runs →
                       </Link>
                     </div>
                   </td>
@@ -576,6 +565,7 @@ export default function TaskWorkspacePage() {
             right: 0,
             bottom: 0,
             backgroundColor: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(6px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -583,61 +573,59 @@ export default function TaskWorkspacePage() {
           }}
           role="dialog"
           aria-modal="true"
-          aria-labelledby="dispatch-dialog-title"
         >
           <div
             className="form-card"
-            style={{ width: "100%", maxWidth: "520px", margin: "1rem" }}
+            style={{ width: "100%", maxWidth: "520px", margin: "1rem", backgroundColor: "var(--bg-surface-solid)" }}
           >
-            <h2 id="dispatch-dialog-title" style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>
+            <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem", color: "var(--text-primary)" }}>
               Dispatch Autonomous Agent
             </h2>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1.25rem" }}>
-              Target Issue: <strong style={{ color: "var(--text-primary)" }}>{dispatchTask.title}</strong> (
-              <span className="table-mono">{dispatchTask.id}</span>)
+            <p style={{ fontSize: "0.825rem", color: "var(--text-secondary)", marginBottom: "1.25rem" }}>
+              Launch cyclic LangGraph workflow for <strong style={{ color: "var(--text-primary)" }}>{dispatchTask.id}</strong> in capability-stripped Docker sandbox.
             </p>
 
-            <div className="form-group" style={{ marginBottom: "1.25rem" }}>
-              <label htmlFor="select-model" className="form-label">
-                Select Model Configuration
-              </label>
-              <select
-                id="select-model"
-                className="form-select"
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-              >
-                {models.map((m) => (
-                  <option key={m.id} value={`${m.provider}/${m.model_name}`}>
-                    {m.name} ({m.provider}/{m.model_name})
-                  </option>
-                ))}
-                {models.length === 0 && (
-                  <option value="anthropic/claude-3-5-sonnet-20241022">
-                    Claude 3.5 Sonnet (anthropic)
-                  </option>
-                )}
-              </select>
-            </div>
+            <form onSubmit={handleDispatchRun}>
+              <div className="form-group" style={{ marginBottom: "1.25rem" }}>
+                <label htmlFor="model-select" className="form-label">
+                  Select Model Configuration
+                </label>
+                <select
+                  id="model-select"
+                  className="form-select"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                >
+                  {models.map((m) => (
+                    <option key={m.id} value={`${m.provider}/${m.model_name}`}>
+                      {m.name} ({m.provider} - {m.model_name})
+                    </option>
+                  ))}
+                  {models.length === 0 && (
+                    <option value="anthropic/claude-3-5-sonnet-20241022">
+                      Claude 3.5 Sonnet (Default Mock)
+                    </option>
+                  )}
+                </select>
+              </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setDispatchTask(null)}
-                disabled={dispatching}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleTriggerRun}
-                disabled={dispatching}
-              >
-                {dispatching ? "Starting Agent..." : "Launch Execution Run"}
-              </button>
-            </div>
+              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setDispatchTask(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={dispatching}
+                >
+                  {dispatching ? "Starting..." : "Launch Run"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

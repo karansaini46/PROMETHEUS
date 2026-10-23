@@ -37,6 +37,14 @@ export interface HealthResponse {
   timestamp: string;
   database: "connected" | "disconnected" | "disabled";
   sandbox_available: boolean;
+  worker?: {
+    status?: string;
+    healthy?: boolean;
+    uptime_seconds?: number;
+    heartbeat_age_seconds?: number;
+    active_tasks?: number;
+    [key: string]: unknown;
+  } | null;
 }
 
 export interface ReadinessResponse {

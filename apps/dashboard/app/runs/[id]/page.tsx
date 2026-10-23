@@ -6,6 +6,17 @@ import { useParams } from "next/navigation";
 import { cancelRun, getRun, getRunEvents } from "../../../lib/api";
 import { EmptyState, ErrorState, LoadingState } from "../../components/UIStates";
 import { DiffViewer } from "../../components/DiffViewer";
+import {
+  IconArrowRight,
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconCopy,
+  IconRefresh,
+  IconTerminal,
+  IconX,
+  IconZap,
+} from "../../components/Icons";
 import type { ExecutionRun, RunEventResponse, RunStatus } from "@prometheus/shared-types";
 
 export default function RunInspectorPage() {
@@ -23,6 +34,7 @@ export default function RunInspectorPage() {
   const [expandedEvents, setExpandedEvents] = useState<Record<string, boolean>>({});
   const [showPatchPreview, setShowPatchPreview] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
 
   const loadRunData = useCallback(async () => {
     if (!runId) return;
@@ -70,6 +82,13 @@ export default function RunInspectorPage() {
     }
   };
 
+  const copyRunId = () => {
+    if (!run) return;
+    navigator.clipboard.writeText(run.id);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 1800);
+  };
+
   const toggleEvent = (eventId: string) => {
     setExpandedEvents((prev) => ({
       ...prev,
@@ -89,11 +108,26 @@ export default function RunInspectorPage() {
     switch (status) {
       case "RUNNING":
       case "VERIFYING":
-        return <span className="badge badge-running"><span className="badge-dot" />{status}</span>;
+        return (
+          <span className="badge badge-running">
+            <span className="badge-dot" />
+            {status}
+          </span>
+        );
       case "RESOLVED":
-        return <span className="badge badge-resolved">✓ RESOLVED</span>;
+        return (
+          <span className="badge badge-resolved">
+            <IconCheck size={11} />
+            RESOLVED
+          </span>
+        );
       case "FAILED":
-        return <span className="badge badge-failed">✕ FAILED</span>;
+        return (
+          <span className="badge badge-failed">
+            <IconX size={11} />
+            FAILED
+          </span>
+        );
       case "CANCELLED":
         return <span className="badge badge-cancelled">CANCELLED</span>;
       case "PENDING":
@@ -142,6 +176,15 @@ export default function RunInspectorPage() {
             <span className="table-mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-primary)" }}>
               {run.id}
             </span>
+            <button
+              type="button"
+              className="copy-pill"
+              onClick={copyRunId}
+              title="Copy Run ID"
+              aria-label="Copy Run ID"
+            >
+              {copiedId ? <IconCheck size={11} color="var(--success)" /> : <IconCopy size={11} />}
+            </button>
             {getStatusBadge(run.status)}
           </div>
           <p className="page-description">
@@ -154,8 +197,13 @@ export default function RunInspectorPage() {
         </div>
 
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={loadRunData}>
-            ↻ Refresh Events
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={loadRunData}
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+          >
+            <IconRefresh size={13} /> Refresh Events
           </button>
           {(run.status === "RUNNING" || run.status === "PENDING") && (
             <button
@@ -168,8 +216,12 @@ export default function RunInspectorPage() {
             </button>
           )}
           {run.patch_diff && (
-            <Link href={`/patch-review`} className="btn btn-primary btn-sm">
-              ⌥ Review Generated Patch
+            <Link
+              href={`/patch-review`}
+              className="btn btn-primary btn-sm"
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+            >
+              Review Generated Patch <IconArrowRight size={13} />
             </Link>
           )}
         </div>
@@ -282,7 +334,6 @@ export default function RunInspectorPage() {
               type="search"
               className="form-input"
               style={{ width: "160px", fontSize: "0.8rem", padding: "0.3rem 0.6rem" }}
-              placeholder="Filter text..."
               value={searchEvent}
               onChange={(e) => setSearchEvent(e.target.value)}
               aria-label="Search within events"
@@ -332,7 +383,7 @@ export default function RunInspectorPage() {
                     <div className="timeline-dot" aria-hidden="true" />
                     <div className="timeline-card">
                       <div className="timeline-header">
-                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                           <span
                             className="table-mono"
                             style={{ fontWeight: 700, color: "var(--accent)" }}
@@ -364,11 +415,14 @@ export default function RunInspectorPage() {
                               style={{
                                 color: "#38bdf8",
                                 backgroundColor: "rgba(56, 189, 248, 0.1)",
-                                padding: "0.15rem 0.4rem",
-                                borderRadius: "3px",
+                                padding: "0.15rem 0.45rem",
+                                borderRadius: "4px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
                               }}
                             >
-                              ⚡ {data.tool_name}
+                              <IconTerminal size={12} /> {data.tool_name}
                             </span>
                           )}
                         </div>
@@ -390,11 +444,12 @@ export default function RunInspectorPage() {
                           <button
                             type="button"
                             className="btn btn-sm btn-secondary"
-                            style={{ padding: "0.15rem 0.45rem", fontSize: "0.7rem" }}
+                            style={{ padding: "0.2rem 0.45rem", fontSize: "0.7rem", display: "inline-flex", alignItems: "center" }}
                             onClick={() => toggleEvent(ev.event_id)}
                             aria-expanded={isExpanded}
+                            title={isExpanded ? "Collapse item" : "Expand item"}
                           >
-                            {isExpanded ? "▲" : "▼"}
+                            {isExpanded ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
                           </button>
                         </div>
                       </div>
