@@ -185,7 +185,7 @@ p, .page-description, .state-description {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
+  padding: 0 2rem;
   position: sticky;
   top: 0;
   z-index: 40;
@@ -222,10 +222,9 @@ p, .page-description, .state-description {
   font-weight: 300;
 }
 
-/* Page Container */
+/* Page Container - Fluid 100% Workbench Layout */
 .page-container {
   padding: 1.75rem 2rem 3.5rem 2rem;
-  max-width: 1440px;
   width: 100%;
 }
 

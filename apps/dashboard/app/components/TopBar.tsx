@@ -59,7 +59,7 @@ export function TopBar() {
       {demoActive && (
         <div
           style={{
-            padding: "0.4rem 1.5rem",
+            padding: "0.4rem 2rem",
             backgroundColor: "#18181b",
             borderBottom: "1px solid var(--border-subtle)",
             display: "flex",
