@@ -332,7 +332,6 @@ export default function TaskWorkspacePage() {
                 id="task-commit"
                 type="text"
                 className="form-input"
-                placeholder="e.g. 7f3b890d (defaults to HEAD)"
                 value={formBaseCommit}
                 onChange={(e) => setFormBaseCommit(e.target.value)}
               />
@@ -347,7 +346,6 @@ export default function TaskWorkspacePage() {
               id="task-title"
               type="text"
               className="form-input"
-              placeholder="e.g. ZeroDivisionError when calculating discount ratio in checkout service"
               value={formTitle}
               onChange={(e) => setFormTitle(e.target.value)}
               required
@@ -362,7 +360,6 @@ export default function TaskWorkspacePage() {
               id="task-problem"
               className="form-textarea"
               rows={4}
-              placeholder="Describe defect behavior, stack traces, and minimal failing reproduction assertions..."
               value={formProblem}
               onChange={(e) => setFormProblem(e.target.value)}
               required
@@ -377,7 +374,6 @@ export default function TaskWorkspacePage() {
               id="task-reproduce-cmd"
               type="text"
               className="form-input"
-              placeholder="e.g. pytest tests/test_checkout.py -k test_zero_division"
               value={formReproduceCmd}
               onChange={(e) => setFormReproduceCmd(e.target.value)}
             />
@@ -439,7 +435,7 @@ export default function TaskWorkspacePage() {
               type="text"
               className="form-input"
               style={{ width: "240px", paddingLeft: "2rem" }}
-              placeholder="Search tasks..."
+              aria-label="Search tasks"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

@@ -179,7 +179,6 @@ export default function ModelLaboratoryPage() {
                 id="model-cfg-name"
                 type="text"
                 className="form-input"
-                placeholder="e.g. Claude 3.5 Sonnet (Production)"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 required
@@ -213,7 +212,6 @@ export default function ModelLaboratoryPage() {
                 id="model-id"
                 type="text"
                 className="form-input"
-                placeholder="e.g. claude-3-5-sonnet-20241022 or gemini-2.5-flash"
                 value={formModelName}
                 onChange={(e) => setFormModelName(e.target.value)}
                 required
@@ -228,7 +226,6 @@ export default function ModelLaboratoryPage() {
                 id="model-api-base"
                 type="text"
                 className="form-input"
-                placeholder="e.g. http://localhost:11434/v1"
                 value={formBaseUrl}
                 onChange={(e) => setFormBaseUrl(e.target.value)}
               />
@@ -316,7 +313,7 @@ export default function ModelLaboratoryPage() {
               type="text"
               className="form-input"
               style={{ width: "240px", paddingLeft: "2rem" }}
-              placeholder="Search model configs..."
+              aria-label="Search model configs"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

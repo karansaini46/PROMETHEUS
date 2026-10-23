@@ -121,7 +121,6 @@ export default function MemoryExplorerPage() {
             type="search"
             className="form-input"
             style={{ width: "260px", paddingLeft: "2rem" }}
-            placeholder="Search patterns, keys, text..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Search memory experiences"

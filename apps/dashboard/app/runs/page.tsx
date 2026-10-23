@@ -279,7 +279,7 @@ function RunsContent() {
               type="text"
               className="form-input"
               style={{ width: "240px", paddingLeft: "2rem" }}
-              placeholder="Filter by ID, task, model..."
+              aria-label="Filter by ID, task, model"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

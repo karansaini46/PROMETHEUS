@@ -460,6 +460,22 @@ export async function getMemoryRecords(): Promise<MemoryRecord[]> {
   return DEMO_MEMORY_RECORDS;
 }
 
+function parseDiffFiles(diffText: string): string[] {
+  const files: Set<string> = new Set();
+  const lines = diffText.split("\n");
+  for (const line of lines) {
+    if (line.startsWith("diff --git")) {
+      const match = line.match(/diff --git a\/(.+?) b\/(.+)/);
+      if (match && match[2]) {
+        files.add(match[2].trim());
+      }
+    } else if (line.startsWith("+++ b/")) {
+      files.add(line.replace("+++ b/", "").trim());
+    }
+  }
+  return files.size > 0 ? Array.from(files) : [];
+}
+
 export async function getPatchReviews(): Promise<PatchReviewItem[]> {
   if (isDemoMode()) {
     return DEMO_PATCH_REVIEWS;
@@ -468,16 +484,20 @@ export async function getPatchReviews(): Promise<PatchReviewItem[]> {
     const runs = await getRuns({ status: "RESOLVED" });
     const patchRuns = runs.filter((r) => r.patch_diff);
     if (patchRuns.length > 0) {
-      return patchRuns.map((r) => ({
-        run_id: r.id,
-        task_id: r.task_id,
-        task_title: `Resolution for ${r.task_id}`,
-        status: r.status,
-        patch_diff: r.patch_diff || "",
-        affected_files: ["src/main.py"],
-        test_status: "PASSED",
-        approved: false,
-      }));
+      return patchRuns.map((r) => {
+        const diff = r.patch_diff || "";
+        const files = parseDiffFiles(diff);
+        return {
+          run_id: r.id,
+          task_id: r.task_id,
+          task_title: `Resolution for ${r.task_id}`,
+          status: r.status,
+          patch_diff: diff,
+          affected_files: files.length > 0 ? files : ["patch.diff"],
+          test_status: "PASSED",
+          approved: false,
+        };
+      });
     }
   } catch {
     // fallback

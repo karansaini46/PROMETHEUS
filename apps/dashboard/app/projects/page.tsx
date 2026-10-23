@@ -141,7 +141,6 @@ export default function ProjectsPage() {
                 id="proj-name"
                 type="text"
                 className="form-input"
-                placeholder="e.g. Django Core Web Framework"
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 required
@@ -154,7 +153,6 @@ export default function ProjectsPage() {
                 id="repo-url"
                 type="url"
                 className="form-input"
-                placeholder="https://github.com/organization/repo.git"
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
                 required
@@ -210,7 +208,7 @@ export default function ProjectsPage() {
               type="text"
               className="form-input"
               style={{ width: "260px", paddingLeft: "2.1rem" }}
-              placeholder="Search workspaces by name or URL..."
+              aria-label="Search workspaces by name or URL"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

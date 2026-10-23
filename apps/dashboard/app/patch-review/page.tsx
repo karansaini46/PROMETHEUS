@@ -329,7 +329,6 @@ export default function PatchReviewPage() {
                   className="form-textarea"
                   style={{ width: "100%" }}
                   rows={2}
-                  placeholder="Optional review observations..."
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                 />

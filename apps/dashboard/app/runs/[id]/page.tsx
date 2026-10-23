@@ -334,7 +334,6 @@ export default function RunInspectorPage() {
               type="search"
               className="form-input"
               style={{ width: "160px", fontSize: "0.8rem", padding: "0.3rem 0.6rem" }}
-              placeholder="Filter text..."
               value={searchEvent}
               onChange={(e) => setSearchEvent(e.target.value)}
               aria-label="Search within events"

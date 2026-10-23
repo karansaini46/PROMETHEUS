@@ -263,7 +263,6 @@ export default function SettingsPage() {
                 type={showApiKey ? "text" : "password"}
                 className="form-input"
                 style={{ flex: 1 }}
-                placeholder="Optional Bearer token"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
               />

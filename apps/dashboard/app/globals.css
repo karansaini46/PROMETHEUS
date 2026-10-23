@@ -719,10 +719,6 @@ p, .page-description, .state-description {
   border-color: var(--border-focus);
 }
 
-.form-input::placeholder, .form-textarea::placeholder {
-  color: var(--text-muted);
-}
-
 .form-label {
   display: block;
   font-size: var(--text-xs);
